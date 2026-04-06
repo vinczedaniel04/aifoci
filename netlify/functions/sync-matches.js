@@ -1,151 +1,158 @@
-sync-matches.js
-
 const { createClient } = require("@supabase/supabase-js");
 
 exports.handler = async function () {
-try {
-const footballToken = process.env.FOOTBALL_DATA_API_KEY;
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+ try {
+ const footballToken = process.env.FOOTBALL_DATA_API_KEY;
+ const supabaseUrl = process.env.SUPABASE_URL;
+ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!footballToken || !supabaseUrl || !supabaseKey) {
-return {
-statusCode: 500,
-headers: {
-"content-type": "application/json"
-},
-body: JSON.stringify({
-error: "Hiányzó FOOTBALL_DATA_API_KEY vagy SUPABASE beállítás"
-})
-};
-}
+ if (!footballToken || !supabaseUrl || !supabaseKey) {
+ return {
+ statusCode: 500,
+ body: JSON.stringify({
+ error: "Hiányzó env változó"
+ })
+ };
+ }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+ const supabase = createClient(supabaseUrl, supabaseKey);
+ const API_BASE = "https://api.football-data.org/v4";
 
-const API_BASE = "https://api.football-data.org/v4";
-const COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1","CL", "EL","UCL"];
+ // FONTOS: csak ezek mennek FREE-ben!
+ const COMPETITIONS = [
+ "PL", // Premier League
+ "PD", // La Liga
+ "BL1", // Bundesliga
+ "SA", // Serie A
+ "FL1" // Ligue 1
+ ];
 
-async function fetchJson(url) {
-const response = await fetch(url, {
-headers: {
-"X-Auth-Token": footballToken
-}
-});
+ function isTodayUtc(dateString) {
+ const d = new Date(dateString);
+ const now = new Date();
 
-if (!response.ok) {
-const text = await response.text();
-throw new Error(`${response.status} ${text}`);
-}
+ return (
+ d.getUTCFullYear() === now.getUTCFullYear() &&
+ d.getUTCMonth() === now.getUTCMonth() &&
+ d.getUTCDate() === now.getUTCDate()
+ );
+ }
 
-return await response.json();
-}
+ async function fetchLeague(code) {
+ try {
+ const res = await fetch(`${API_BASE}/competitions/${code}/matches`, {
+ headers: {
+ "X-Auth-Token": footballToken
+ }
+ });
 
-function isTodayUtc(dateString) {
-const d = new Date(dateString);
-const now = new Date();
+ if (!res.ok) {
+ const txt = await res.text();
+ console.error(` ${code} hiba:`, txt);
+ return [];
+ }
 
-return (
-d.getUTCFullYear() === now.getUTCFullYear() &&
-d.getUTCMonth() === now.getUTCMonth() &&
-d.getUTCDate() === now.getUTCDate()
-);
-}
+ const data = await res.json();
 
-const { error: deleteError } = await supabase
-.from("matches")
-.delete()
-.neq("match_id", 0);
+ return (data.matches || [])
+ .filter((m) => isTodayUtc(m.utcDate))
+ .map((m) => ({
+ match_id: m.id,
+ match_date: m.utcDate,
+ competition_code: m.competition.code,
+ competition_name: m.competition.name,
+ competition_emblem: m.competition.emblem || null,
+ status: m.status,
 
-if (deleteError) {
-throw deleteError;
-}
+ home_team_id: m.homeTeam.id,
+ home_team_name: m.homeTeam.name,
+ home_team_crest: m.homeTeam.crest || null,
 
-const allMatches = await Promise.all(
-COMPETITIONS.map(async (code) => {
-const data = await fetchJson(`${API_BASE}/competitions/${code}/matches`);
+ away_team_id: m.awayTeam.id,
+ away_team_name: m.awayTeam.name,
+ away_team_crest: m.awayTeam.crest || null,
 
-return (data.matches || [])
-.filter((m) => isTodayUtc(m.utcDate))
-.map((m) => ({
-match_id: m.id,
-match_date: m.utcDate,
-competition_code: m.competition.code,
-competition_name: m.competition.name,
-competition_emblem: m.competition.emblem || null,
-status: m.status,
+ full_time_home: m.score?.fullTime?.home ?? null,
+ full_time_away: m.score?.fullTime?.away ?? null,
 
-home_team_id: m.homeTeam.id,
-home_team_name: m.homeTeam.name,
-home_team_crest: m.homeTeam.crest || null,
+ live_home:
+ m.score?.fullTime?.home ??
+ m.score?.halfTime?.home ??
+ null,
 
-away_team_id: m.awayTeam.id,
-away_team_name: m.awayTeam.name,
-away_team_crest: m.awayTeam.crest || null,
+ live_away:
+ m.score?.fullTime?.away ??
+ m.score?.halfTime?.away ??
+ null,
 
-full_time_home: m.score?.fullTime?.home ?? null,
-full_time_away: m.score?.fullTime?.away ?? null,
+ minute: m.minute ?? null,
+ updated_at: new Date().toISOString()
+ }));
 
-live_home:
-m.score?.fullTime?.home ??
-m.score?.halfTime?.home ??
-null,
+ } catch (err) {
+ console.error(` ${code} fetch crash:`, err.message);
+ return [];
+ }
+ }
 
-live_away:
-m.score?.fullTime?.away ??
-m.score?.halfTime?.away ??
-null,
+ // ligák sorban (nem párhuzamos → nem léped túl limitet)
+ let allMatches = [];
 
-minute: null,
-source_updated_at: new Date().toISOString()
-}));
-})
-);
+ for (const code of COMPETITIONS) {
+ const leagueMatches = await fetchLeague(code);
+ allMatches.push(...leagueMatches);
 
-const rows = allMatches.flat();
+ // kis delay hogy ne bannoljon API
+ await new Promise(r => setTimeout(r, 1200));
+ }
 
-if (rows.length === 0) {
-return {
-statusCode: 200,
-headers: {
-"content-type": "application/json"
-},
-body: JSON.stringify({
-ok: true,
-saved: 0,
-message: "Ma nincs meccs a kiválasztott ligákban."
-})
-};
-}
+ console.log("Összes meccs:", allMatches.length);
 
-const { error } = await supabase
-.from("matches")
-.upsert(rows, { onConflict: "match_id" });
+ // HA NINCS adat → NEM törlünk!
+ if (allMatches.length === 0) {
+ return {
+ statusCode: 200,
+ body: JSON.stringify({
+ ok: false,
+ message: "Nincs adat az API-ból (valószínű limit vagy hiba)"
+ })
+ };
+ }
 
-if (error) {
-throw error;
-}
+ // csak akkor törlünk ha VAN adat
+ const { error: deleteError } = await supabase
+ .from("matches")
+ .delete()
+ .neq("match_id", 0);
 
-return {
-statusCode: 200,
-headers: {
-"content-type": "application/json",
-"cache-control": "public, max-age=300"
-},
-body: JSON.stringify({
-ok: true,
-saved: rows.length,
-leagues: [...new Set(rows.map((r) => r.competition_code))]
-})
-};
-} catch (error) {
-return {
-statusCode: 500,
-headers: {
-"content-type": "application/json"
-},
-body: JSON.stringify({
-error: error.message || "Ismeretlen hiba"
-})
-};
-}
+ if (deleteError) {
+ throw deleteError;
+ }
+
+ const { error: insertError } = await supabase
+ .from("matches")
+ .upsert(allMatches, { onConflict: "match_id" });
+
+ if (insertError) {
+ throw insertError;
+ }
+
+ return {
+ statusCode: 200,
+ body: JSON.stringify({
+ ok: true,
+ saved: allMatches.length
+ })
+ };
+
+ } catch (error) {
+ console.error("SYNC ERROR:", error);
+
+ return {
+ statusCode: 500,
+ body: JSON.stringify({
+ error: error.message
+ })
+ };
+ }
 };
