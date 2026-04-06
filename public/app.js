@@ -478,5 +478,5 @@ window.addEventListener("DOMContentLoaded", async () => {
 
  setInterval(() => {
  loadPredictions(true);
- }, 60000);
+ }, 180000);
 });
