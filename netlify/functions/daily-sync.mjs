@@ -1,34 +1,57 @@
 export default async () => {
-  const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
+ const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
 
-  if (!baseUrl) {
-    throw new Error("Hiányzik a URL vagy DEPLOY_PRIME_URL env.");
-  }
+ async function call(name) {
+ try {
+ const res = await fetch(`${baseUrl}/.netlify/functions/${name}`);
+ console.log(` ${name}`);
+ return await res.json();
+ } catch (e) {
+ console.log(` ${name}`, e.message);
+ return null;
+ }
+ }
 
-  async function callFunction(name) {
-    const url = `${baseUrl}/.netlify/functions/${name}`;
+ console.log(" daily-sync indul");
 
-    const response = await fetch(url);
-    const json = await response.json();
+ // VAN-E LIVE MECCS?
+ const liveCheck = await fetch(`${baseUrl}/.netlify/functions/read-predictions`);
+ const liveData = await liveCheck.json();
 
-    if (!response.ok) {
-      throw new Error(`${name} hiba: ${JSON.stringify(json)}`);
-    }
+ const hasLive = (liveData.predictions || []).some(p =>
+ ["LIVE", "IN_PLAY"].includes((p.status || "").toUpperCase())
+ );
 
-    return json;
-  }
+ console.log("LIVE meccs:", hasLive);
 
-  const matches = await callFunction("sync-matches");
-  const teamForm = await callFunction("sync-team-form");
-  const predictions = await callFunction("sync-predictions");
+ const now = new Date();
+ const minute = now.getUTCMinutes();
 
-  console.log("daily-sync kész", {
-    matches,
-    teamForm,
-    predictions
-  });
+ // MATCHES LOGIKA
+ if (hasLive) {
+ // ha live van → minden percben
+ await call("sync-matches");
+ } else {
+ // ha nincs → 3 percenként
+ if (minute % 3 === 0) {
+ await call("sync-matches");
+ } else {
+ console.log(" sync-matches skip");
+ }
+ }
+
+ // ezek mindig mehetnek
+ await call("sync-team-form");
+ await call("sync-predictions");
+
+ console.log(" kész");
+
+ return {
+ statusCode: 200,
+ body: JSON.stringify({ ok: true })
+ };
 };
 
 export const config = {
-  schedule: "*/15 * * * *"
+ schedule: "* * * * *"
 };

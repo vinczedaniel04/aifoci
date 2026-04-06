@@ -141,43 +141,65 @@ exports.handler = async function () {
 
  if (formError) throw formError;
 
+ const { data: existingPredictions, error: existingPredictionsError } = await supabase
+ .from("predictions_history")
+ .select("match_id");
+
+ if (existingPredictionsError) throw existingPredictionsError;
+
+ const existingPredictionIds = new Set(
+ (existingPredictions || []).map((row) => row.match_id)
+ );
+
  const formMap = new Map();
  for (const row of formRows || []) {
  formMap.set(row.team_id, row);
  }
 
- const rows = (matches || []).map((match) => {
- const homeForm = formMap.get(match.home_team_id) || {
- avg_goals_for: 1.2,
- avg_goals_against: 1.2,
- avg_goals_for_home: 1.2,
- avg_goals_against_home: 1.2
- };
+ const rowsToInsert = [];
+ const rowsToUpdate = [];
 
- const awayForm = formMap.get(match.away_team_id) || {
- avg_goals_for: 1.0,
- avg_goals_against: 1.0,
- avg_goals_for_away: 1.0,
- avg_goals_against_away: 1.0
- };
+ for (const match of matches || []) {
+ const homeForm = formMap.get(match.home_team_id);
+ const awayForm = formMap.get(match.away_team_id);
 
- const prediction = predictMatch(match, homeForm, awayForm);
+ // Ha nincs meg mindkét forma, most nem tudunk vele mit kezdeni
+ if (!homeForm || !awayForm) {
+ continue;
+ }
 
  const isFinished = (match.status || "").toUpperCase() === "FINISHED";
-
  const actualTotal = isFinished
  ? (match.full_time_home ?? 0) + (match.full_time_away ?? 0)
  : null;
-
  const actualBtts = isFinished
  ? (match.full_time_home ?? 0) > 0 && (match.full_time_away ?? 0) > 0
  : null;
 
+ // Ha már van prediction, NEM írjuk felül a kezdeti tippet.
+ // Csak az élő / végeredmény / státusz mezőket frissítjük.
+ if (existingPredictionIds.has(match.match_id)) {
+ rowsToUpdate.push({
+ match_id: match.match_id,
+ status: match.status,
+ live_home: match.live_home ?? null,
+ live_away: match.live_away ?? null,
+ minute: match.minute ?? null,
+ actual_home_goals: isFinished ? match.full_time_home : null,
+ actual_away_goals: isFinished ? match.full_time_away : null,
+ updated_at: new Date().toISOString()
+ });
+
+ continue;
+ }
+
+ // Ha még nincs prediction, most számoljuk ki egyszer
+ const prediction = predictMatch(match, homeForm, awayForm);
  const actualScore = isFinished
  ? `${match.full_time_home ?? 0}-${match.full_time_away ?? 0}`
  : null;
 
- return {
+ rowsToInsert.push({
  match_id: match.match_id,
  match_date: match.match_date,
  competition_code: match.competition_code,
@@ -214,14 +236,69 @@ exports.handler = async function () {
  : null,
 
  updated_at: new Date().toISOString()
- };
  });
+ }
 
- const { error: upsertError } = await supabase
+ if (rowsToInsert.length > 0) {
+ const { error: insertError } = await supabase
  .from("predictions_history")
- .upsert(rows, { onConflict: "match_id" });
+ .upsert(rowsToInsert, { onConflict: "match_id" });
 
- if (upsertError) throw upsertError;
+ if (insertError) throw insertError;
+ }
+
+ // Meglévő predictionöknél csak az állapotot / eredményt frissítjük
+ for (const row of rowsToUpdate) {
+ const { data: existingRow, error: existingRowError } = await supabase
+ .from("predictions_history")
+ .select(
+ "predicted_score, predicted_over25_probability, predicted_btts_probability"
+ )
+ .eq("match_id", row.match_id)
+ .maybeSingle();
+
+ if (existingRowError) throw existingRowError;
+ if (!existingRow) continue;
+
+ const isFinished = (row.status || "").toUpperCase() === "FINISHED";
+
+ let exact_hit = null;
+ let over25_hit = null;
+ let btts_hit = null;
+
+ if (isFinished) {
+ const actualScore = `${row.actual_home_goals ?? 0}-${row.actual_away_goals ?? 0}`;
+ const actualTotal = (row.actual_home_goals ?? 0) + (row.actual_away_goals ?? 0);
+ const actualBtts =
+ (row.actual_home_goals ?? 0) > 0 && (row.actual_away_goals ?? 0) > 0;
+
+ exact_hit = existingRow.predicted_score === actualScore;
+ over25_hit =
+ (Number(existingRow.predicted_over25_probability || 0) >= 50) ===
+ (actualTotal > 2.5);
+ btts_hit =
+ (Number(existingRow.predicted_btts_probability || 0) >= 50) ===
+ actualBtts;
+ }
+
+ const { error: updateError } = await supabase
+ .from("predictions_history")
+ .update({
+ status: row.status,
+ live_home: row.live_home,
+ live_away: row.live_away,
+ minute: row.minute,
+ actual_home_goals: row.actual_home_goals,
+ actual_away_goals: row.actual_away_goals,
+ exact_hit,
+ over25_hit,
+ btts_hit,
+ updated_at: row.updated_at
+ })
+ .eq("match_id", row.match_id);
+
+ if (updateError) throw updateError;
+ }
 
  return {
  statusCode: 200,
@@ -230,7 +307,8 @@ exports.handler = async function () {
  },
  body: JSON.stringify({
  ok: true,
- saved: rows.length,
+ inserted: rowsToInsert.length,
+ updated: rowsToUpdate.length,
  match_day: matchDay
  })
  };
