@@ -3,7 +3,7 @@ const listEl = document.getElementById("list");
 const reloadBtn = document.getElementById("reloadBtn");
 
 const CACHE_KEY = "foci_predictions_cache";
-const CACHE_TIME = 5 * 60 * 1000;
+const CACHE_TIME = 2 * 60 * 1000;
 
 function factorial(n) {
  if (n <= 1) return 1;
@@ -226,6 +226,18 @@ function createMatchCard(item) {
  const predictedBttsText =
  Number(item.predicted_btts_probability || 0) >= 50 ? "GG" : "NG";
 
+ const homeGoals = item.actual_home_goals ?? 0;
+ const awayGoals = item.actual_away_goals ?? 0;
+
+ const showLiveScore = ["LIVE", "IN_PLAY", "PAUSED", "FINISHED"].includes(
+ (item.status || "").toUpperCase()
+ );
+
+ const minute =
+ item.minute && ["LIVE", "IN_PLAY", "PAUSED"].includes((item.status || "").toUpperCase())
+ ? `${item.minute}'`
+ : "";
+
  const card = document.createElement("div");
  card.className = "card";
 
@@ -236,11 +248,16 @@ function createMatchCard(item) {
  <div class="team-side">
  ${item.home_team_crest ? `<img src="${item.home_team_crest}" class="team-logo" alt="${item.home_team_name}">` : ""}
  <span>${item.home_team_name}</span>
+ ${showLiveScore ? `<span class="team-score">${homeGoals}</span>` : ""}
  </div>
 
+ <div class="vs-block">
  <div class="vs">vs</div>
+ ${minute ? `<div class="match-minute">${minute}</div>` : ""}
+ </div>
 
  <div class="team-side away-side">
+ ${showLiveScore ? `<span class="team-score">${awayGoals}</span>` : ""}
  <span>${item.away_team_name}</span>
  ${item.away_team_crest ? `<img src="${item.away_team_crest}" class="team-logo" alt="${item.away_team_name}">` : ""}
  </div>
