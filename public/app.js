@@ -8,582 +8,610 @@ const OPEN_LEAGUES_KEY = "foci_open_leagues";
 const OPEN_MATCHES_KEY = "foci_open_matches";
 
 function factorial(n) {
-  if (n <= 1) return 1;
-  let result = 1;
-  for (let i = 2; i <= n; i += 1) result *= i;
-  return result;
+ if (n <= 1) return 1;
+ let result = 1;
+ for (let i = 2; i <= n; i += 1) result *= i;
+ return result;
 }
 
 function poisson(lambda, k) {
-  return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
+ return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
 }
 
 function buildGoalMatrix(expectedHomeGoals, expectedAwayGoals) {
-  const matrix = [];
-  let maxProbability = 0;
-  let topCell = "0-0";
+ const matrix = [];
+ let maxProbability = 0;
+ let topCell = "0-0";
 
-  for (let home = 0; home <= 4; home += 1) {
-    const row = [];
-    for (let away = 0; away <= 4; away += 1) {
-      const probability =
-        poisson(expectedHomeGoals, home) * poisson(expectedAwayGoals, away);
-      const percent = Number((probability * 100).toFixed(1));
+ for (let home = 0; home <= 4; home += 1) {
+ const row = [];
+ for (let away = 0; away <= 4; away += 1) {
+ const probability =
+ poisson(expectedHomeGoals, home) * poisson(expectedAwayGoals, away);
+ const percent = Number((probability * 100).toFixed(1));
 
-      if (percent > maxProbability) {
-        maxProbability = percent;
-        topCell = `${home}-${away}`;
-      }
+ if (percent > maxProbability) {
+ maxProbability = percent;
+ topCell = `${home}-${away}`;
+ }
 
-      row.push({
-        home,
-        away,
-        percent
-      });
-    }
-    matrix.push(row);
-  }
+ row.push({
+ home,
+ away,
+ percent
+ });
+ }
+ matrix.push(row);
+ }
 
-  return { matrix, topCell };
+ return { matrix, topCell };
 }
 
 function renderGoalMatrix(expectedHomeGoals, expectedAwayGoals) {
-  const { matrix, topCell } = buildGoalMatrix(
-    expectedHomeGoals,
-    expectedAwayGoals
-  );
+ const { matrix, topCell } = buildGoalMatrix(
+ expectedHomeGoals,
+ expectedAwayGoals
+ );
 
-  let html = `
-    <div class="matrix-wrap">
-      <div class="matrix-title">Gólmátrix (0–4 gól)</div>
-      <table class="matrix-table">
-        <thead>
-          <tr>
-            <th>Hazai \\ Vendég</th>
-            <th>0</th>
-            <th>1</th>
-            <th>2</th>
-            <th>3</th>
-            <th>4</th>
-          </tr>
-        </thead>
-        <tbody>
-  `;
+ let html = `
+ <div class="matrix-wrap">
+ <div class="matrix-title">Gólmátrix (0–4 gól)</div>
+ <table class="matrix-table">
+ <thead>
+ <tr>
+ <th>Hazai \\ Vendég</th>
+ <th>0</th>
+ <th>1</th>
+ <th>2</th>
+ <th>3</th>
+ <th>4</th>
+ </tr>
+ </thead>
+ <tbody>
+ `;
 
-  for (let home = 0; home < matrix.length; home += 1) {
-    html += `<tr><th>${home}</th>`;
-    for (let away = 0; away < matrix[home].length; away += 1) {
-      const cell = matrix[home][away];
-      const score = `${cell.home}-${cell.away}`;
-      const topClass = score === topCell ? "top-prob" : "";
-      html += `<td class="${topClass}">${cell.percent}%</td>`;
-    }
-    html += `</tr>`;
-  }
+ for (let home = 0; home < matrix.length; home += 1) {
+ html += `<tr><th>${home}</th>`;
+ for (let away = 0; away < matrix[home].length; away += 1) {
+ const cell = matrix[home][away];
+ const score = `${cell.home}-${cell.away}`;
+ const topClass = score === topCell ? "top-prob" : "";
+ html += `<td class="${topClass}">${cell.percent}%</td>`;
+ }
+ html += `</tr>`;
+ }
 
-  html += `
-        </tbody>
-      </table>
-      <div class="matrix-note">A pirossal jelölt cella a legvalószínűbb pontos eredmény.</div>
-    </div>
-  `;
+ html += `
+ </tbody>
+ </table>
+ <div class="matrix-note">A pirossal jelölt cella a legvalószínűbb pontos eredmény.</div>
+ </div>
+ `;
 
-  return html;
+ return html;
 }
 
 function groupByLeague(items) {
-  const grouped = {};
+ const grouped = {};
 
-  for (const item of items) {
-    const key = `${item.competition_name} (${item.competition_code})`;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(item);
-  }
+ for (const item of items) {
+ const key = `${item.competition_name} (${item.competition_code})`;
+ if (!grouped[key]) grouped[key] = [];
+ grouped[key].push(item);
+ }
 
-  return grouped;
+ return grouped;
 }
 
 function calculateStats(items) {
-  let finished = 0;
-  let exact = 0;
-  let over = 0;
-  let btts = 0;
+ let finished = 0;
+ let exact = 0;
+ let over = 0;
+ let btts = 0;
 
-  items.forEach((item) => {
-    const status = (item.status || "").toUpperCase();
-    if (status !== "FINISHED") return;
+ items.forEach((item) => {
+ const status = (item.status || "").toUpperCase();
+ if (status !== "FINISHED") return;
 
-    finished++;
+ finished++;
 
-    if (item.exact_hit === true) exact++;
-    if (item.over25_hit === true) over++;
-    if (item.btts_hit === true) btts++;
-  });
+ if (item.exact_hit === true) exact++;
+ if (item.over25_hit === true) over++;
+ if (item.btts_hit === true) btts++;
+ });
 
-  return {
-    finished,
-    exact,
-    over,
-    btts
-  };
+ return {
+ finished,
+ exact,
+ over,
+ btts
+ };
 }
 
 function getMatchStatusBadge(item) {
-  const status = (item.status || "").toUpperCase();
+ const status = (item.status || "").toUpperCase();
 
-  if (status === "FINISHED") {
-    return `
-      <div class="finished-badge">
-        Lejátszott
-      </div>
-    `;
-  }
+ if (status === "FINISHED") {
+ return `
+ <div class="finished-badge">
+ LEJÁTSZVA
+ </div>
+ `;
+ }
 
-  if (status === "LIVE" || status === "IN_PLAY" || status === "PAUSED") {
-    return `
-      <div class="live-badge">
-        <span class="live-dot"></span>
-        ÉLŐ
-      </div>
-    `;
-  }
+ if (status === "LIVE" || status === "IN_PLAY" || status === "PAUSED") {
+ return `
+ <div class="live-badge">
+ <span class="live-dot"></span>
+ ÉLŐ
+ </div>
+ `;
+ }
 
-  if (status === "SCHEDULED" || status === "TIMED") {
-    return `
-      <div class="scheduled-badge">
-        Hamarosan
-      </div>
-    `;
-  }
+ if (status === "SCHEDULED" || status === "TIMED") {
+ return `
+ <div class="scheduled-badge">
+ KÖZELGŐ
+ </div>
+ `;
+ }
 
-  return `
-    <div class="started-badge">
-      <span class="live-dot"></span>
-      Folyamatban
-    </div>
-  `;
+ return `
+ <div class="started-badge">
+ <span class="live-dot"></span>
+ ELKEZDŐDÖTT
+ </div>
+ `;
 }
 
 function getFinishedAnalysis(item) {
-  const status = (item.status || "").toUpperCase();
-  if (status !== "FINISHED") return "";
+ const status = (item.status || "").toUpperCase();
+ if (status !== "FINISHED") return "";
 
-  const home = item.actual_home_goals;
-  const away = item.actual_away_goals;
+ const home = item.actual_home_goals;
+ const away = item.actual_away_goals;
 
-  if (home == null || away == null) return "";
+ if (home == null || away == null) return "";
 
-  const actualScore = `${home}-${away}`;
+ const actualScore = `${home}-${away}`;
 
-  return `
-    <div class="grid">
-      <div class="box">
-        <span class="label">Valós végeredmény</span>
-        <strong>${actualScore}</strong>
-      </div>
-      <div class="box">
-        <span class="label">AI tipp</span>
-        <strong>${item.predicted_score || "-"}</strong>
-      </div>
-      <div class="box">
-        <span class="label">Pontos eredmény</span>
-        <strong>${item.exact_hit ? "IGEN" : "NEM"}</strong>
-      </div>
-      <div class="box">
-        <span class="label">Over 2.5 találat</span>
-        <strong>${item.over25_hit ? "IGEN" : "NEM"}</strong>
-      </div>
-      <div class="box">
-        <span class="label">BTTS találat</span>
-        <strong>${item.btts_hit ? "IGEN" : "NEM"}</strong>
-      </div>
-      <div class="box">
-        <span class="label">Összgól</span>
-        <strong>${home + away}</strong>
-      </div>
-    </div>
-  `;
+ return `
+ <div class="grid">
+ <div class="box">
+ <span class="label">Valós végeredmény</span>
+ <strong>${actualScore}</strong>
+ </div>
+ <div class="box">
+ <span class="label">AI tipp</span>
+ <strong>${item.predicted_score || "-"}</strong>
+ </div>
+ <div class="box">
+ <span class="label">Pontos eredmény</span>
+ <strong>${item.exact_hit ? "IGEN" : "NEM"}</strong>
+ </div>
+ <div class="box">
+ <span class="label">Over 2.5 találat</span>
+ <strong>${item.over25_hit ? "IGEN" : "NEM"}</strong>
+ </div>
+ <div class="box">
+ <span class="label">BTTS találat</span>
+ <strong>${item.btts_hit ? "IGEN" : "NEM"}</strong>
+ </div>
+ <div class="box">
+ <span class="label">Összgól</span>
+ <strong>${home + away}</strong>
+ </div>
+ </div>
+ `;
 }
 
 function createToggleSection(title, innerHtml) {
-  if (!innerHtml) return "";
+ if (!innerHtml) return "";
 
-  const sectionId = `toggle-${Math.random().toString(36).slice(2, 10)}`;
+ const sectionId = `toggle-${Math.random().toString(36).slice(2, 10)}`;
 
-  return `
-    <div class="toggle-area">
-      <button class="toggle-btn" type="button" data-toggle-target="${sectionId}">
-        ${title}
-      </button>
-      <div class="toggle-content" id="${sectionId}">
-        ${innerHtml}
-      </div>
-    </div>
-  `;
+ return `
+ <div class="toggle-area">
+ <button class="toggle-btn" type="button" data-toggle-target="${sectionId}">
+ ${title}
+ </button>
+ <div class="toggle-content" id="${sectionId}">
+ ${innerHtml}
+ </div>
+ </div>
+ `;
 }
 
 function wireToggleButtons(rootEl) {
-  const buttons = rootEl.querySelectorAll("[data-toggle-target]");
+ const buttons = rootEl.querySelectorAll("[data-toggle-target]");
 
-  buttons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetId = btn.getAttribute("data-toggle-target");
-      const target = rootEl.querySelector(`#${targetId}`);
-      if (!target) return;
-      target.classList.toggle("open");
-    });
-  });
+ buttons.forEach((btn) => {
+ btn.addEventListener("click", (event) => {
+ event.stopPropagation();
+
+ const targetId = btn.getAttribute("data-toggle-target");
+ const target = rootEl.querySelector(`#${targetId}`);
+ if (!target) return;
+
+ const isOpen = target.classList.contains("open");
+ target.classList.toggle("open");
+
+ btn.textContent = isOpen
+ ? btn.textContent.replace("elrejtése", "megnyitása")
+ : btn.textContent.replace("megnyitása", "elrejtése");
+ });
+ });
 }
 
 function loadOpenLeagues() {
-  try {
-    const raw = localStorage.getItem(OPEN_LEAGUES_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+ try {
+ const raw = localStorage.getItem(OPEN_LEAGUES_KEY);
+ return raw ? JSON.parse(raw) : {};
+ } catch {
+ return {};
+ }
 }
 
 function saveOpenLeagues(state) {
-  localStorage.setItem(OPEN_LEAGUES_KEY, JSON.stringify(state));
+ localStorage.setItem(OPEN_LEAGUES_KEY, JSON.stringify(state));
 }
 
 function loadOpenMatches() {
-  try {
-    const raw = localStorage.getItem(OPEN_MATCHES_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+ try {
+ const raw = localStorage.getItem(OPEN_MATCHES_KEY);
+ return raw ? JSON.parse(raw) : {};
+ } catch {
+ return {};
+ }
 }
 
 function saveOpenMatches(state) {
-  localStorage.setItem(OPEN_MATCHES_KEY, JSON.stringify(state));
-}
-
-function getToggleArrow(isOpen) {
-  return isOpen ? `<span class="toggle-arrow">▼</span>` : `<span class="toggle-arrow">▶</span>`;
+ localStorage.setItem(OPEN_MATCHES_KEY, JSON.stringify(state));
 }
 
 function createMatchCard(item) {
-  const status = (item.status || "").toUpperCase();
-  const isFinished = status === "FINISHED";
-  const isLive = ["LIVE", "IN_PLAY", "PAUSED"].includes(status);
+ const statusBadge = getMatchStatusBadge(item);
 
-  const homeGoals = isFinished
-    ? (item.actual_home_goals ?? 0)
-    : (item.live_home ?? 0);
+ const status = (item.status || "").toUpperCase();
+ const isFinished = status === "FINISHED";
+ const isLive = ["LIVE", "IN_PLAY", "PAUSED"].includes(status);
 
-  const awayGoals = isFinished
-    ? (item.actual_away_goals ?? 0)
-    : (item.live_away ?? 0);
+ const resultLine = isFinished
+ ? `<div class="time"><b>Végeredmény:</b> ${item.actual_home_goals ?? 0} - ${item.actual_away_goals ?? 0}</div>`
+ : `<div class="time">Kezdés: ${new Date(item.match_date).toLocaleString("hu-HU")}</div>`;
 
-  const showScore = isFinished || isLive;
+ const cornersTotal =
+ item.predicted_corners_total != null ? item.predicted_corners_total : "-";
+ const cardsTotal =
+ item.predicted_cards_total != null ? item.predicted_cards_total : "-";
 
-  // Perc + ráadás
-  let minuteDisplay = "";
-  if (isLive && item.minute != null) {
-    minuteDisplay = item.minute;
-    if (item.injury_time && item.injury_time > 0) {
-      minuteDisplay += `+${item.injury_time}`;
-    }
-    minuteDisplay += "'";
-  }
+ const predictedOver25Text =
+ Number(item.predicted_over25_probability || 0) >= 50 ? "2,5 FELETT" : "2,5 ALATT";
 
-  const statusBadge = getMatchStatusBadge(item);
-  const matchKey = String(item.match_id);
-  const openMatches = loadOpenMatches();
-  const isOpen = !!openMatches[matchKey];
+ const predictedBttsText =
+ Number(item.predicted_btts_probability || 0) >= 50 ? "GG" : "NG";
 
-  const finishedAnalysisHtml = getFinishedAnalysis(item);
-  const goalMatrixHtml = renderGoalMatrix(
-    Number(item.predicted_home_goals || 0),
-    Number(item.predicted_away_goals || 0)
-  );
+ const homeGoals = isFinished
+ ? (item.actual_home_goals ?? 0)
+ : (item.live_home ?? 0);
 
-  const card = document.createElement("div");
-  card.className = "card match-card";
+ const awayGoals = isFinished
+ ? (item.actual_away_goals ?? 0)
+ : (item.live_away ?? 0);
 
-  card.innerHTML = `
-    <button class="match-header" type="button">
-      <div class="match-header-top">
-        ${statusBadge}
-        <div class="match-toggle-text">${getToggleArrow(isOpen)}</div>
-      </div>
+ const showScore = isFinished || isLive;
+ const minute =
+ isLive && item.minute != null
+ ? `${item.minute}'`
+ : isLive
+ ? "LIVE"
+ : "";
 
-      <div class="teams-row">
-        <div class="team-side">
-          ${item.home_team_crest ? `<img src="${item.home_team_crest}" class="team-logo" alt="${item.home_team_name}">` : ""}
-          <span class="team-name">${item.home_team_name}</span>
-          ${showScore ? `<span class="team-score">${homeGoals}</span>` : ""}
-        </div>
+ const matchKey = String(item.match_id);
+ const openMatches = loadOpenMatches();
+ const isOpen = !!openMatches[matchKey];
 
-        <div class="vs-block">
-          <div class="vs">vs</div>
-          ${minuteDisplay ? `<div class="match-minute">${minuteDisplay}</div>` : ""}
-        </div>
+ const finishedAnalysisHtml = getFinishedAnalysis(item);
+ const goalMatrixHtml = renderGoalMatrix(
+ Number(item.predicted_home_goals || 0),
+ Number(item.predicted_away_goals || 0)
+ );
 
-        <div class="team-side away-side">
-          ${showScore ? `<span class="team-score">${awayGoals}</span>` : ""}
-          <span class="team-name">${item.away_team_name}</span>
-          ${item.away_team_crest ? `<img src="${item.away_team_crest}" class="team-logo" alt="${item.away_team_name}">` : ""}
-        </div>
-      </div>
-    </button>
+ const card = document.createElement("div");
+ card.className = "card match-card";
 
-    <div class="match-body ${isOpen ? "open" : ""}">
-      <div class="grid">
-        <div class="box">
-          <span class="label">Legvalószínűbb eredmény</span>
-          <strong>${item.predicted_score || "-"}</strong>
-        </div>
+ card.innerHTML = `
+ <button class="match-header" type="button">
+ <div class="match-header-top">
+ ${statusBadge}
+ <div class="chevron ${isOpen ? "open" : ""}">⌄</div>
+ </div>
 
-        <div class="box">
-          <span class="label">Várható gólok</span>
-          <strong>${item.predicted_home_goals ?? "-"} - ${item.predicted_away_goals ?? "-"}</strong>
-        </div>
+ <div class="teams-row">
+ <div class="team-side">
+ ${item.home_team_crest ? `<img src="${item.home_team_crest}" class="team-logo" alt="${item.home_team_name}">` : ""}
+ <span class="team-name">${item.home_team_name}</span>
+ ${showScore ? `<span class="team-score">${homeGoals}</span>` : ""}
+ </div>
 
-        <div class="box">
-          <span class="label">Over 2.5 (%)</span>
-          <strong>${item.predicted_over25_probability ?? "-"}%</strong>
-        </div>
+ <div class="vs-block">
+ <div class="vs">vs</div>
+ ${minute ? `<div class="match-minute">${minute}</div>` : ""}
+ </div>
 
-        <div class="box">
-          <span class="label">BTTS (%)</span>
-          <strong>${item.predicted_btts_probability ?? "-"}%</strong>
-        </div>
+ <div class="team-side away-side">
+ ${showScore ? `<span class="team-score">${awayGoals}</span>` : ""}
+ <span class="team-name">${item.away_team_name}</span>
+ ${item.away_team_crest ? `<img src="${item.away_team_crest}" class="team-logo" alt="${item.away_team_name}">` : ""}
+ </div>
+ </div>
 
-        <div class="box highlight">
-          <span class="label">AI tipp 2,5</span>
-          <strong>${Number(item.predicted_over25_probability || 0) >= 50 ? "2,5 FELETT" : "2,5 ALATT"}</strong>
-        </div>
+ ${resultLine}
+ </button>
 
-        <div class="box highlight">
-          <span class="label">AI tipp GG</span>
-          <strong>${Number(item.predicted_btts_probability || 0) >= 50 ? "GG" : "NG"}</strong>
-        </div>
+ <div class="match-body ${isOpen ? "open" : ""}">
+ <div class="grid">
+ <div class="box">
+ <span class="label">Legvalószínűbb eredmény</span>
+ <strong>${item.predicted_score || "-"}</strong>
+ </div>
 
-        <div class="box">
-          <span class="label">Szögletek</span>
-          <strong>${item.predicted_corners_total ?? "-"}</strong>
-        </div>
+ <div class="box">
+ <span class="label">Várható gólok</span>
+ <strong>${item.predicted_home_goals ?? "-"} - ${item.predicted_away_goals ?? "-"}</strong>
+ </div>
 
-        <div class="box">
-          <span class="label">Lapok</span>
-          <strong>${item.predicted_cards_total ?? "-"}</strong>
-        </div>
-      </div>
+ <div class="box">
+ <span class="label">Over 2.5 (%)</span>
+ <strong>${item.predicted_over25_probability ?? "-"}%</strong>
+ </div>
 
-      <div class="explanation">${item.explanation || ""}</div>
+ <div class="box">
+ <span class="label">BTTS (%)</span>
+ <strong>${item.predicted_btts_probability ?? "-"}%</strong>
+ </div>
 
-      ${isFinished ? createToggleSection("AI ellenőrzés megnyitása", finishedAnalysisHtml) : ""}
-      ${createToggleSection("Gólmátrix megnyitása", goalMatrixHtml)}
-    </div>
-  `;
+ <div class="box highlight">
+ <span class="label">AI tipp 2,5</span>
+ <strong>${predictedOver25Text}</strong>
+ </div>
 
-  const headerBtn = card.querySelector(".match-header");
-  const body = card.querySelector(".match-body");
-  const arrow = card.querySelector(".toggle-arrow");
+ <div class="box highlight">
+ <span class="label">AI tipp GG</span>
+ <strong>${predictedBttsText}</strong>
+ </div>
 
-  headerBtn.addEventListener("click", () => {
-    const nowOpen = body.classList.toggle("open");
-    arrow.textContent = nowOpen ? "▼" : "▶";
+ <div class="box">
+ <span class="label">Szögletek</span>
+ <strong>${cornersTotal}</strong>
+ </div>
 
-    const current = loadOpenMatches();
-    current[matchKey] = nowOpen;
-    saveOpenMatches(current);
-  });
+ <div class="box">
+ <span class="label">Lapok</span>
+ <strong>${cardsTotal}</strong>
+ </div>
+ </div>
 
-  wireToggleButtons(card);
+ <div class="explanation">${item.explanation || ""}</div>
 
-  return card;
+ ${isFinished ? createToggleSection("AI ellenőrzés megnyitása", finishedAnalysisHtml) : ""}
+ ${createToggleSection("Gólmátrix megnyitása", goalMatrixHtml)}
+ </div>
+ `;
+
+ const headerBtn = card.querySelector(".match-header");
+ const body = card.querySelector(".match-body");
+ const chevron = card.querySelector(".chevron");
+
+ headerBtn.addEventListener("click", () => {
+ const nowOpen = body.classList.toggle("open");
+ chevron.classList.toggle("open", nowOpen);
+
+ const current = loadOpenMatches();
+ current[matchKey] = nowOpen;
+ saveOpenMatches(current);
+ });
+
+ wireToggleButtons(card);
+
+ return card;
 }
 
 function createLeagueBlock(leagueName, items) {
-  const openState = loadOpenLeagues();
-  const isOpen = !!openState[leagueName];
+ const openState = loadOpenLeagues();
+ const isOpen = !!openState[leagueName];
 
-  const liveCount = items.filter((x) =>
-    ["LIVE", "IN_PLAY", "PAUSED"].includes((x.status || "").toUpperCase())
-  ).length;
+ const liveCount = items.filter((x) =>
+ ["LIVE", "IN_PLAY", "PAUSED"].includes((x.status || "").toUpperCase())
+ ).length;
 
-  const finishedCount = items.filter(
-    (x) => (x.status || "").toUpperCase() === "FINISHED"
-  ).length;
+ const finishedCount = items.filter(
+ (x) => (x.status || "").toUpperCase() === "FINISHED"
+ ).length;
 
-  const wrapper = document.createElement("section");
-  wrapper.className = "league-block";
+ const wrapper = document.createElement("section");
+ wrapper.className = "league-block";
 
-  const header = document.createElement("button");
-  header.className = "league-header";
+ const header = document.createElement("button");
+ header.className = "league-header";
 
-  const emblem = items[0]?.competition_emblem || "";
+ const emblem = items[0]?.competition_emblem || "";
 
-  header.innerHTML = `
-    <span class="league-title-wrap">
-      ${emblem ? `<img src="${emblem}" class="league-logo" alt="${leagueName}">` : ""}
-      <span>${leagueName}</span>
-    </span>
+ header.innerHTML = `
+ <span class="league-title-wrap">
+ ${emblem ? `<img src="${emblem}" class="league-logo" alt="${leagueName}">` : ""}
+ <span>${leagueName}</span>
+ </span>
 
-    <span class="league-meta">
-      ${liveCount > 0 ? `<span class="league-live-pill">${liveCount} élő</span>` : ""}
-      <span class="league-toggle-text">${items.length} meccs • ${finishedCount} lejátszva ${getToggleArrow(isOpen)}</span>
-    </span>
-  `;
+ <span class="league-meta">
+ ${liveCount > 0 ? `<span class="league-live-pill">${liveCount} élő</span>` : ""}
+ <span class="league-toggle-text">${items.length} meccs • ${finishedCount} lejátszva</span>
+ <span class="chevron ${isOpen ? "open" : ""}">⌄</span>
+ </span>
+ `;
 
-  const content = document.createElement("div");
-  content.className = "league-content";
+ const content = document.createElement("div");
+ content.className = "league-content";
 
-  if (isOpen) {
-    content.classList.add("open");
-  }
+ if (isOpen) {
+ content.classList.add("open");
+ }
 
-  for (const item of items) {
-    content.appendChild(createMatchCard(item));
-  }
+ for (const item of items) {
+ content.appendChild(createMatchCard(item));
+ }
 
-  header.addEventListener("click", () => {
-    content.classList.toggle("open");
-    const nowOpen = content.classList.contains("open");
+ header.addEventListener("click", () => {
+ content.classList.toggle("open");
+ const nowOpen = content.classList.contains("open");
 
-    const toggleText = header.querySelector(".league-toggle-text");
-    if (toggleText) {
-      toggleText.innerHTML = `${items.length} meccs • ${finishedCount} lejátszva ${getToggleArrow(nowOpen)}`;
-    }
+ const toggleText = header.querySelector(".league-toggle-text");
+ if (toggleText) {
+ toggleText.textContent = `${items.length} meccs • ${finishedCount} lejátszva`;
+ }
 
-    const currentState = loadOpenLeagues();
-    currentState[leagueName] = nowOpen;
-    saveOpenLeagues(currentState);
-  });
+ const chevron = header.querySelector(".chevron");
+ if (chevron) {
+ chevron.classList.toggle("open", nowOpen);
+ }
 
-  wrapper.appendChild(header);
-  wrapper.appendChild(content);
+ const currentState = loadOpenLeagues();
+ currentState[leagueName] = nowOpen;
+ saveOpenLeagues(currentState);
+ });
 
-  return wrapper;
+ wrapper.appendChild(header);
+ wrapper.appendChild(content);
+
+ return wrapper;
 }
 
 function renderData(items) {
-  const newList = document.createElement("div");
+ const newList = document.createElement("div");
 
-  if (!items.length) {
-    statusEl.textContent = "Nincs predikció az adatbázisban.";
-    listEl.innerHTML = "";
-    return;
-  }
+ if (!items.length) {
+ statusEl.textContent = "Nincs predikció az adatbázisban.";
+ listEl.innerHTML = "";
+ return;
+ }
 
-  const stats = calculateStats(items);
+ const stats = calculateStats(items);
 
-  if (stats.finished > 0) {
-    const statBox = document.createElement("div");
-    statBox.className = "card top-stat-card";
+ if (stats.finished > 0) {
+ const statBox = document.createElement("div");
+ statBox.className = "card top-stat-card";
 
-    const overPct = ((stats.over / stats.finished) * 100).toFixed(0);
-    const bttsPct = ((stats.btts / stats.finished) * 100).toFixed(0);
-    const exactPct = ((stats.exact / stats.finished) * 100).toFixed(0);
+ const overPct = ((stats.over / stats.finished) * 100).toFixed(0);
+ const bttsPct = ((stats.btts / stats.finished) * 100).toFixed(0);
+ const exactPct = ((stats.exact / stats.finished) * 100).toFixed(0);
 
-    statBox.innerHTML = `
-      <div class="top-stat-title">AI napi teljesítmény</div>
+ statBox.innerHTML = `
+ <div class="top-stat-header">
+ <div>
+ <div class="top-stat-kicker">Napi összesítő</div>
+ <div class="top-stat-title">AI teljesítmény</div>
+ </div>
+ <div class="top-stat-badge">${stats.finished} meccs</div>
+ </div>
 
-      <div class="grid">
-        <div class="box">
-          <span class="label">Lejátszott meccsek</span>
-          <strong>${stats.finished}</strong>
-        </div>
+ <div class="top-stat-grid">
+ <div class="top-mini-box">
+ <span class="label">Pontos eredmény</span>
+ <strong>${stats.exact}</strong>
+ <small>${exactPct}%</small>
+ </div>
 
-        <div class="box">
-          <span class="label">Pontos eredmény</span>
-          <strong>${stats.exact} (${exactPct}%)</strong>
-        </div>
+ <div class="top-mini-box">
+ <span class="label">Over 2.5</span>
+ <strong>${stats.over}</strong>
+ <small>${overPct}%</small>
+ </div>
 
-        <div class="box">
-          <span class="label">Over 2.5 találat</span>
-          <strong>${stats.over} (${overPct}%)</strong>
-        </div>
+ <div class="top-mini-box">
+ <span class="label">BTTS</span>
+ <strong>${stats.btts}</strong>
+ <small>${bttsPct}%</small>
+ </div>
+ </div>
+ `;
 
-        <div class="box">
-          <span class="label">BTTS találat</span>
-          <strong>${stats.btts} (${bttsPct}%)</strong>
-        </div>
-      </div>
-    `;
+ newList.appendChild(statBox);
+ }
 
-    newList.appendChild(statBox);
-  }
+ const grouped = groupByLeague(items);
+ const leagues = Object.keys(grouped);
 
-  const grouped = groupByLeague(items);
-  const leagues = Object.keys(grouped);
+ leagues.forEach((leagueName) => {
+ const block = createLeagueBlock(leagueName, grouped[leagueName]);
+ newList.appendChild(block);
+ });
 
-  leagues.forEach((leagueName) => {
-    const block = createLeagueBlock(leagueName, grouped[leagueName]);
-    newList.appendChild(block);
-  });
-
-  listEl.replaceChildren(...newList.childNodes);
+ listEl.replaceChildren(...newList.childNodes);
 }
 
 async function loadPredictions(forceRefresh = false, silent = false) {
-  if (!silent) {
-    statusEl.textContent = "Betöltés adatbázisból...";
-  }
+ if (!silent) {
+ statusEl.textContent = "Betöltés adatbázisból...";
+ }
 
-  try {
-    if (!forceRefresh) {
-      const cached = localStorage.getItem(CACHE_KEY);
+ try {
+ if (!forceRefresh) {
+ const cached = localStorage.getItem(CACHE_KEY);
 
-      if (cached) {
-        const parsed = JSON.parse(cached);
+ if (cached) {
+ const parsed = JSON.parse(cached);
 
-        if (Date.now() - parsed.time < CACHE_TIME) {
-          renderData(parsed.data);
-          if (!silent) {
-            statusEl.textContent = "Cache-ből betöltve";
-          }
-          return parsed.data;
-        }
-      }
-    }
+ if (Date.now() - parsed.time < CACHE_TIME) {
+ renderData(parsed.data);
+ if (!silent) {
+ statusEl.textContent = "Cache-ből betöltve";
+ }
+ return parsed.data;
+ }
+ }
+ }
 
-    const response = await fetch("/.netlify/functions/read-predictions");
-    const data = await response.json();
+ const response = await fetch("/.netlify/functions/read-predictions");
+ const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error || "Szerverhiba");
-    }
+ if (!response.ok) {
+ throw new Error(data.error || "Szerverhiba");
+ }
 
-    const items = data.predictions || [];
+ const items = data.predictions || [];
 
-    localStorage.setItem(
-      CACHE_KEY,
-      JSON.stringify({
-        time: Date.now(),
-        data: items
-      })
-    );
+ localStorage.setItem(
+ CACHE_KEY,
+ JSON.stringify({
+ time: Date.now(),
+ data: items
+ })
+ );
 
-    renderData(items);
+ renderData(items);
 
-    if (!silent) {
-      statusEl.textContent = `Betöltve DB-ből: ${items.length} predikció`;
-    }
+ if (!silent) {
+ statusEl.textContent = `Betöltve DB-ből: ${items.length} predikció`;
+ }
 
-    return items;
-  } catch (error) {
-    if (!silent) {
-      statusEl.textContent = error.message || "Hiba történt.";
-    }
-    return [];
-  }
+ return items;
+ } catch (error) {
+ if (!silent) {
+ statusEl.textContent = error.message || "Hiba történt.";
+ }
+ return [];
+ }
 }
 
 reloadBtn.addEventListener("click", async () => {
-  localStorage.removeItem(CACHE_KEY);
-  await loadPredictions(true, false);
+ localStorage.removeItem(CACHE_KEY);
+ await loadPredictions(true, false);
 });
 
 window.addEventListener("DOMContentLoaded", async () => {
-  await loadPredictions(true, false);
+ await loadPredictions(true, false);
 
-  setInterval(() => {
-    loadPredictions(true, true);
-  }, 180000);
+ setInterval(() => {
+ loadPredictions(true, true);
+ }, 180000);
 });
