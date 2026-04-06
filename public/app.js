@@ -281,53 +281,51 @@ function createMatchCard(item) {
 }
 
 function createLeagueBlock(leagueName, items, isOpen = false) {
-  const wrapper = document.createElement("section");
-  wrapper.className = "league-block";
+ const wrapper = document.createElement("section");
+ wrapper.className = "league-block";
 
-  const header = document.createElement("button");
+ const header = document.createElement("button");
+ header.className = "league-header";
 
-  
+ const emblem = items[0]?.competition_emblem || "";
 
-  header.className = "league-header";
+ header.innerHTML = `
+ <span class="league-title-wrap">
+ ${emblem ? `<img src="${emblem}" class="league-logo" alt="${leagueName}">` : ""}
+ <span>${leagueName}</span>
+ </span>
+ <span class="league-toggle-text">${items.length} meccs • lenyitás</span>
+ `;
 
-  const emblem=item[0]?.competition_emblem||"";
-  header.innerHTML = `
-    <span class="league-title-wrap">
-      ${emblem ? `<img src="${emblem}" class="league-logo">` : ""}
-    <span>${leagueName}</span>
-    </span>
-    <span class="league-toggle-text">${items.length} meccs •  lenyitás}</span>
-  `;
+ const content = document.createElement("div");
+ content.className = "league-content";
 
-  const content = document.createElement("div");
-  content.className = "league-content";
+ if (isOpen) {
+ content.classList.add("open");
+ const toggleText = header.querySelector(".league-toggle-text");
+ if (toggleText) {
+ toggleText.textContent = `${items.length} meccs • összecsukás`;
+ }
+ }
 
-  if (isOpen) {
-    content.classList.add("open");
-    const toggleText = header.querySelector(".league-toggle-text");
-    if (toggleText) {
-      toggleText.textContent = `${items.length} meccs • összecsukás`;
-    }
-  }
+ for (const item of items) {
+ content.appendChild(createMatchCard(item));
+ }
 
-  for (const item of items) {
-    content.appendChild(createMatchCard(item));
-  }
+ header.addEventListener("click", () => {
+ content.classList.toggle("open");
+ const toggleText = header.querySelector(".league-toggle-text");
+ if (toggleText) {
+ toggleText.textContent = content.classList.contains("open")
+ ? `${items.length} meccs • összecsukás`
+ : `${items.length} meccs • lenyitás`;
+ }
+ });
 
-  header.addEventListener("click", () => {
-    content.classList.toggle("open");
-    const toggleText = header.querySelector(".league-toggle-text");
-    if (toggleText) {
-      toggleText.textContent = content.classList.contains("open")
-        ? `${items.length} meccs • összecsukás`
-        : `${items.length} meccs • lenyitás`;
-    }
-  });
+ wrapper.appendChild(header);
+ wrapper.appendChild(content);
 
-  wrapper.appendChild(header);
-  wrapper.appendChild(content);
-
-  return wrapper;
+ return wrapper;
 }
 
 function renderData(items) {
