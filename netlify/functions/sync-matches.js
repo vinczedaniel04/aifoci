@@ -1,3 +1,5 @@
+sync-matches.js
+
 const { createClient } = require("@supabase/supabase-js");
 
 exports.handler = async function () {
@@ -21,17 +23,7 @@ error: "Hiányzó FOOTBALL_DATA_API_KEY vagy SUPABASE beállítás"
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const API_BASE = "https://api.football-data.org/v4";
-const COMPETITIONS = [
-"PL",
-"PD",
-"BL1",
-"SA",
-"FL1",
-"CL",
-"EL",
-"UCL",
-"ESC"
-];
+const COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1","CL", "EL","UCL"];
 
 async function fetchJson(url) {
 const response = await fetch(url, {
@@ -45,7 +37,7 @@ const text = await response.text();
 throw new Error(`${response.status} ${text}`);
 }
 
-return response.json();
+return await response.json();
 }
 
 function isTodayUtc(dateString) {
@@ -103,7 +95,7 @@ m.score?.fullTime?.away ??
 m.score?.halfTime?.away ??
 null,
 
-minute: m.minute ?? null,
+minute: null,
 source_updated_at: new Date().toISOString()
 }));
 })
