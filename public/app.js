@@ -132,11 +132,7 @@ function getMatchStatusBadge(item) {
  const status = (item.status || "").toUpperCase();
 
  if (status === "FINISHED") {
- return `
- <div class="finished-badge">
- LEJÁTSZVA
- </div>
- `;
+ return `<div class="finished-badge">LEJÁTSZVA</div>`;
  }
 
  if (status === "LIVE" || status === "IN_PLAY" || status === "PAUSED") {
@@ -149,11 +145,7 @@ function getMatchStatusBadge(item) {
  }
 
  if (status === "SCHEDULED" || status === "TIMED") {
- return `
- <div class="scheduled-badge">
- KÖZELGŐ
- </div>
- `;
+ return `<div class="scheduled-badge">KÖZELGŐ</div>`;
  }
 
  return `
@@ -300,12 +292,6 @@ function createMatchCard(item) {
  : (item.live_away ?? 0);
 
  const showScore = isFinished || isLive;
- const minute =
- isLive && item.minute != null
- ? `${item.minute}'`
- : isLive
- ? "LIVE"
- : "";
 
  const matchKey = String(item.match_id);
  const openMatches = loadOpenMatches();
@@ -336,7 +322,6 @@ function createMatchCard(item) {
 
  <div class="vs-block">
  <div class="vs">vs</div>
- ${minute ? `<div class="match-minute">${minute}</div>` : ""}
  </div>
 
  <div class="team-side away-side">
@@ -359,6 +344,21 @@ function createMatchCard(item) {
  <div class="box">
  <span class="label">Várható gólok</span>
  <strong>${item.predicted_home_goals ?? "-"} - ${item.predicted_away_goals ?? "-"}</strong>
+ </div>
+
+ <div class="box">
+ <span class="label">Hazai győzelem</span>
+ <strong>${item.predicted_home_win_probability ?? "-"}%</strong>
+ </div>
+
+ <div class="box">
+ <span class="label">Döntetlen</span>
+ <strong>${item.predicted_draw_probability ?? "-"}%</strong>
+ </div>
+
+ <div class="box">
+ <span class="label">Vendég győzelem</span>
+ <strong>${item.predicted_away_win_probability ?? "-"}%</strong>
  </div>
 
  <div class="box">
@@ -613,5 +613,5 @@ window.addEventListener("DOMContentLoaded", async () => {
 
  setInterval(() => {
  loadPredictions(true, true);
- }, 180000);
+ }, 60000);
 });
