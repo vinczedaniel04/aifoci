@@ -80,13 +80,16 @@ exports.handler = async function () {
  const awayDefense =
  Number(awayForm.avg_goals_against_away ?? awayForm.avg_goals_against ?? 1.0);
 
- const expectedHomeGoals = (homeAttack + awayDefense) / 2;
+ const expectedHomeGoals = ((homeAttack + awayDefense) / 2) + 0.15;
  const expectedAwayGoals = (awayAttack + homeDefense) / 2;
 
  let bestProbability = 0;
  let bestScore = "0-0";
  let over25 = 0;
  let btts = 0;
+ let homeWin = 0;
+ let draw = 0;
+ let awayWin = 0;
 
  for (let h = 0; h <= 5; h += 1) {
  for (let a = 0; a <= 5; a += 1) {
@@ -100,6 +103,10 @@ exports.handler = async function () {
 
  if (h + a >= 3) over25 += probability;
  if (h > 0 && a > 0) btts += probability;
+
+ if (h > a) homeWin += probability;
+ else if (h === a) draw += probability;
+ else awayWin += probability;
  }
  }
 
@@ -117,9 +124,12 @@ exports.handler = async function () {
  predicted_away_goals: Number(expectedAwayGoals.toFixed(2)),
  predicted_over25_probability: Number((over25 * 100).toFixed(2)),
  predicted_btts_probability: Number((btts * 100).toFixed(2)),
+ predicted_home_win_probability: Number((homeWin * 100).toFixed(2)),
+ predicted_draw_probability: Number((draw * 100).toFixed(2)),
+ predicted_away_win_probability: Number((awayWin * 100).toFixed(2)),
  predicted_corners_total: corners.total,
  predicted_cards_total: cards.total,
- explanation: `A modell a mai csapatok előző 5 meccséből számolt formaadatokat használja. A várható gólok alapján ${match.home_team_name} ${expectedHomeGoals.toFixed(
+ explanation: `A modell 10 hazai és 10 idegenbeli szezonmeccsből számol. A várható gólok alapján ${match.home_team_name} ${expectedHomeGoals.toFixed(
  2
  )}, ${match.away_team_name} ${expectedAwayGoals.toFixed(
  2
@@ -157,29 +167,36 @@ exports.handler = async function () {
  }
 
  const rowsToInsert = [];
- const rowsToUpdate = [];
+ const rowsToUpdateUnlocked = [];
+ const rowsToUpdateLocked = [];
 
  for (const match of matches || []) {
  const homeForm = formMap.get(match.home_team_id);
  const awayForm = formMap.get(match.away_team_id);
 
- // Ha nincs meg mindkét forma, most nem tudunk vele mit kezdeni
  if (!homeForm || !awayForm) {
  continue;
  }
 
- const isFinished = (match.status || "").toUpperCase() === "FINISHED";
+ const statusUpper = (match.status || "").toUpperCase();
+ const isFinished = statusUpper === "FINISHED";
+ const isLockedStatus = ["LIVE", "IN_PLAY", "PAUSED", "FINISHED"].includes(statusUpper);
+
  const actualTotal = isFinished
  ? (match.full_time_home ?? 0) + (match.full_time_away ?? 0)
  : null;
+
  const actualBtts = isFinished
  ? (match.full_time_home ?? 0) > 0 && (match.full_time_away ?? 0) > 0
  : null;
 
- // Ha már van prediction, NEM írjuk felül a kezdeti tippet.
- // Csak az élő / végeredmény / státusz mezőket frissítjük.
- if (existingPredictionIds.has(match.match_id)) {
- rowsToUpdate.push({
+ const actualScore = isFinished
+ ? `${match.full_time_home ?? 0}-${match.full_time_away ?? 0}`
+ : null;
+
+ // Ha már létezik ÉS locked státuszban van, nem számoljuk újra a predictiont
+ if (existingPredictionIds.has(match.match_id) && isLockedStatus) {
+ rowsToUpdateLocked.push({
  match_id: match.match_id,
  status: match.status,
  live_home: match.live_home ?? null,
@@ -193,13 +210,10 @@ exports.handler = async function () {
  continue;
  }
 
- // Ha még nincs prediction, most számoljuk ki egyszer
+ // Ha nincs lock, akkor friss predikció készülhet
  const prediction = predictMatch(match, homeForm, awayForm);
- const actualScore = isFinished
- ? `${match.full_time_home ?? 0}-${match.full_time_away ?? 0}`
- : null;
 
- rowsToInsert.push({
+ const predictionRow = {
  match_id: match.match_id,
  match_date: match.match_date,
  competition_code: match.competition_code,
@@ -221,6 +235,9 @@ exports.handler = async function () {
  predicted_away_goals: prediction.predicted_away_goals,
  predicted_over25_probability: prediction.predicted_over25_probability,
  predicted_btts_probability: prediction.predicted_btts_probability,
+ predicted_home_win_probability: prediction.predicted_home_win_probability,
+ predicted_draw_probability: prediction.predicted_draw_probability,
+ predicted_away_win_probability: prediction.predicted_away_win_probability,
  predicted_corners_total: prediction.predicted_corners_total,
  predicted_cards_total: prediction.predicted_cards_total,
  explanation: prediction.explanation,
@@ -236,7 +253,13 @@ exports.handler = async function () {
  : null,
 
  updated_at: new Date().toISOString()
- });
+ };
+
+ if (existingPredictionIds.has(match.match_id)) {
+ rowsToUpdateUnlocked.push(predictionRow);
+ } else {
+ rowsToInsert.push(predictionRow);
+ }
  }
 
  if (rowsToInsert.length > 0) {
@@ -247,8 +270,8 @@ exports.handler = async function () {
  if (insertError) throw insertError;
  }
 
- // Meglévő predictionöknél csak az állapotot / eredményt frissítjük
- for (const row of rowsToUpdate) {
+ // Locked meccsek: csak live / status / actual mezők frissülnek
+ for (const row of rowsToUpdateLocked) {
  const { data: existingRow, error: existingRowError } = await supabase
  .from("predictions_history")
  .select(
@@ -300,6 +323,50 @@ exports.handler = async function () {
  if (updateError) throw updateError;
  }
 
+ // Nem lockolt, már létező meccsek: prediction is frissül
+ for (const row of rowsToUpdateUnlocked) {
+ const { error: updateError } = await supabase
+ .from("predictions_history")
+ .update({
+ match_date: row.match_date,
+ competition_code: row.competition_code,
+ competition_name: row.competition_name,
+ competition_emblem: row.competition_emblem,
+ status: row.status,
+
+ home_team_name: row.home_team_name,
+ away_team_name: row.away_team_name,
+ home_team_crest: row.home_team_crest,
+ away_team_crest: row.away_team_crest,
+
+ live_home: row.live_home,
+ live_away: row.live_away,
+ minute: row.minute,
+
+ predicted_score: row.predicted_score,
+ predicted_home_goals: row.predicted_home_goals,
+ predicted_away_goals: row.predicted_away_goals,
+ predicted_over25_probability: row.predicted_over25_probability,
+ predicted_btts_probability: row.predicted_btts_probability,
+ predicted_home_win_probability: row.predicted_home_win_probability,
+ predicted_draw_probability: row.predicted_draw_probability,
+ predicted_away_win_probability: row.predicted_away_win_probability,
+ predicted_corners_total: row.predicted_corners_total,
+ predicted_cards_total: row.predicted_cards_total,
+ explanation: row.explanation,
+
+ actual_home_goals: row.actual_home_goals,
+ actual_away_goals: row.actual_away_goals,
+ exact_hit: row.exact_hit,
+ over25_hit: row.over25_hit,
+ btts_hit: row.btts_hit,
+ updated_at: row.updated_at
+ })
+ .eq("match_id", row.match_id);
+
+ if (updateError) throw updateError;
+ }
+
  return {
  statusCode: 200,
  headers: {
@@ -308,7 +375,8 @@ exports.handler = async function () {
  body: JSON.stringify({
  ok: true,
  inserted: rowsToInsert.length,
- updated: rowsToUpdate.length,
+ updated_locked: rowsToUpdateLocked.length,
+ updated_unlocked: rowsToUpdateUnlocked.length,
  match_day: matchDay
  })
  };
