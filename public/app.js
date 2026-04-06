@@ -4,6 +4,7 @@ const reloadBtn = document.getElementById("reloadBtn");
 
 const CACHE_KEY = "foci_predictions_cache";
 const CACHE_TIME = 5 * 60 * 1000;
+const OPEN_LEAGUES_KEY = "foci_open_leagues";
 
 function factorial(n) {
  if (n <= 1) return 1;
@@ -321,7 +322,23 @@ function createMatchCard(item) {
  return card;
 }
 
-function createLeagueBlock(leagueName, items, isOpen = false) {
+function loadOpenLeagues() {
+ try {
+ const raw = localStorage.getItem(OPEN_LEAGUES_KEY);
+ return raw ? JSON.parse(raw) : {};
+ } catch {
+ return {};
+ }
+}
+
+function saveOpenLeagues(state) {
+ localStorage.setItem(OPEN_LEAGUES_KEY, JSON.stringify(state));
+}
+
+function createLeagueBlock(leagueName, items) {
+ const openState = loadOpenLeagues();
+ const isOpen = !!openState[leagueName];
+
  const wrapper = document.createElement("section");
  wrapper.className = "league-block";
 
@@ -335,7 +352,7 @@ function createLeagueBlock(leagueName, items, isOpen = false) {
  ${emblem ? `<img src="${emblem}" class="league-logo" alt="${leagueName}">` : ""}
  <span>${leagueName}</span>
  </span>
- <span class="league-toggle-text">${items.length} meccs • lenyitás</span>
+ <span class="league-toggle-text">${items.length} meccs • ${isOpen ? "összecsukás" : "lenyitás"}</span>
  `;
 
  const content = document.createElement("div");
@@ -343,10 +360,6 @@ function createLeagueBlock(leagueName, items, isOpen = false) {
 
  if (isOpen) {
  content.classList.add("open");
- const toggleText = header.querySelector(".league-toggle-text");
- if (toggleText) {
- toggleText.textContent = `${items.length} meccs • összecsukás`;
- }
  }
 
  for (const item of items) {
@@ -355,12 +368,16 @@ function createLeagueBlock(leagueName, items, isOpen = false) {
 
  header.addEventListener("click", () => {
  content.classList.toggle("open");
+ const nowOpen = content.classList.contains("open");
+
  const toggleText = header.querySelector(".league-toggle-text");
  if (toggleText) {
- toggleText.textContent = content.classList.contains("open")
- ? `${items.length} meccs • összecsukás`
- : `${items.length} meccs • lenyitás`;
+ toggleText.textContent = `${items.length} meccs • ${nowOpen ? "összecsukás" : "lenyitás"}`;
  }
+
+ const currentState = loadOpenLeagues();
+ currentState[leagueName] = nowOpen;
+ saveOpenLeagues(currentState);
  });
 
  wrapper.appendChild(header);
@@ -421,7 +438,7 @@ function renderData(items) {
  const leagues = Object.keys(grouped);
 
  leagues.forEach((leagueName) => {
- const block = createLeagueBlock(leagueName, grouped[leagueName], false);
+ const block = createLeagueBlock(leagueName, grouped[leagueName]);
  newList.appendChild(block);
  });
 
@@ -492,5 +509,5 @@ window.addEventListener("DOMContentLoaded", async () => {
 
  setInterval(() => {
  loadPredictions(true, true);
- }, 180000); // 3 perc
+ }, 180000);
 });
