@@ -3,7 +3,7 @@ const listEl = document.getElementById("list");
 const reloadBtn = document.getElementById("reloadBtn");
 
 const CACHE_KEY = "foci_predictions_cache";
-const CACHE_TIME = 2 * 60 * 1000;
+const CACHE_TIME = 5 * 60 * 1000;
 
 function factorial(n) {
  if (n <= 1) return 1;
@@ -209,7 +209,9 @@ function getFinishedAnalysis(item) {
 function createMatchCard(item) {
  const statusBadge = getMatchStatusBadge(item);
 
- const isFinished = (item.status || "").toUpperCase() === "FINISHED";
+ const status = (item.status || "").toUpperCase();
+ const isFinished = status === "FINISHED";
+ const isLive = ["LIVE", "IN_PLAY", "PAUSED"].includes(status);
 
  const resultLine = isFinished
  ? `<div class="time"><b>Végeredmény:</b> ${item.actual_home_goals ?? 0} - ${item.actual_away_goals ?? 0}</div>`
@@ -226,17 +228,16 @@ function createMatchCard(item) {
  const predictedBttsText =
  Number(item.predicted_btts_probability || 0) >= 50 ? "GG" : "NG";
 
- const homeGoals = item.actual_home_goals ?? 0;
- const awayGoals = item.actual_away_goals ?? 0;
+ const homeGoals = isFinished
+ ? (item.actual_home_goals ?? 0)
+ : (item.live_home ?? 0);
 
- const showLiveScore = ["LIVE", "IN_PLAY", "PAUSED", "FINISHED"].includes(
- (item.status || "").toUpperCase()
- );
+ const awayGoals = isFinished
+ ? (item.actual_away_goals ?? 0)
+ : (item.live_away ?? 0);
 
- const minute =
- item.minute && ["LIVE", "IN_PLAY", "PAUSED"].includes((item.status || "").toUpperCase())
- ? `${item.minute}'`
- : "";
+ const showScore = isFinished || isLive;
+ const minute = isLive && item.minute ? `${item.minute}` : "";
 
  const card = document.createElement("div");
  card.className = "card";
@@ -248,7 +249,7 @@ function createMatchCard(item) {
  <div class="team-side">
  ${item.home_team_crest ? `<img src="${item.home_team_crest}" class="team-logo" alt="${item.home_team_name}">` : ""}
  <span>${item.home_team_name}</span>
- ${showLiveScore ? `<span class="team-score">${homeGoals}</span>` : ""}
+ ${showScore ? `<span class="team-score">${homeGoals}</span>` : ""}
  </div>
 
  <div class="vs-block">
@@ -257,7 +258,7 @@ function createMatchCard(item) {
  </div>
 
  <div class="team-side away-side">
- ${showLiveScore ? `<span class="team-score">${awayGoals}</span>` : ""}
+ ${showScore ? `<span class="team-score">${awayGoals}</span>` : ""}
  <span>${item.away_team_name}</span>
  ${item.away_team_crest ? `<img src="${item.away_team_crest}" class="team-logo" alt="${item.away_team_name}">` : ""}
  </div>
@@ -424,11 +425,12 @@ function renderData(items) {
  });
 }
 
-async function loadPredictions() {
+async function loadPredictions(forceRefresh = false) {
  statusEl.textContent = "Betöltés adatbázisból...";
  listEl.innerHTML = "";
 
  try {
+ if (!forceRefresh) {
  const cached = localStorage.getItem(CACHE_KEY);
 
  if (cached) {
@@ -438,6 +440,7 @@ async function loadPredictions() {
  renderData(parsed.data);
  statusEl.textContent = "Cache-ből betöltve";
  return;
+ }
  }
  }
 
@@ -465,5 +468,15 @@ async function loadPredictions() {
  }
 }
 
-reloadBtn.addEventListener("click", loadPredictions);
-window.addEventListener("DOMContentLoaded", loadPredictions);
+reloadBtn.addEventListener("click", async () => {
+ localStorage.removeItem(CACHE_KEY);
+ await loadPredictions(true);
+});
+
+window.addEventListener("DOMContentLoaded", async () => {
+ await loadPredictions(true);
+
+ setInterval(() => {
+ loadPredictions(true);
+ }, 60000);
+});

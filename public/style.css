@@ -147,10 +147,10 @@ margin-bottom: 8px;
 display: flex;
 align-items: center;
 justify-content: space-between;
-gap: 12px;
+gap: 18px;
 font-size: 24px;
 font-weight: 800;
-margin-bottom: 10px;
+margin-bottom: 14px;
 }
 
 .team-side {
@@ -178,9 +178,13 @@ flex-shrink: 0;
 }
 
 .team-score {
-font-weight: 800;
-font-size: 18px;
+font-weight: 900;
+font-size: 26px;
 color: #38bdf8;
+margin-left: 8px;
+margin-right: 8px;
+min-width: 20px;
+text-align: center;
 }
 
 .vs-block {
@@ -188,20 +192,20 @@ display: flex;
 flex-direction: column;
 align-items: center;
 justify-content: center;
-min-width: 60px;
+min-width: 70px;
 }
 
 .vs {
-opacity: 0.7;
-font-size: 14px;
-font-weight: 700;
+opacity: 0.75;
+font-size: 16px;
+font-weight: 800;
 }
 
 .match-minute {
-font-size: 12px;
+font-size: 13px;
 color: #fbbf24;
-margin-top: 2px;
-font-weight: 700;
+margin-top: 4px;
+font-weight: 800;
 }
 
 .time {
@@ -410,6 +414,10 @@ height: 16px;
 }
 
 .team-score {
-font-size: 16px;
+font-size: 22px;
+}
+
+.vs-block {
+min-width: 56px;
 }
 }
