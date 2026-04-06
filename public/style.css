@@ -308,4 +308,35 @@ button:hover {
     transform: scale(0.85);
     opacity: 0.6;
   }
+  
+}
+.team-logo {
+width: 20px;
+height: 20px;
+border-radius:50%;
+object-fit: contain;
+padding:2px;
+}
+
+.team-side {
+display: flex;
+align-items: center;
+gap: 6px;
+}
+
+.away-side {
+justify-content: flex-end;
+}
+
+.teams-row {
+display: flex;
+justify-content: space-between;
+align-items: center;
+font-weight: 600;
+margin-bottom: 8px;
+}
+
+.vs {
+opacity: 0.6;
+font-size: 12px;
 }
