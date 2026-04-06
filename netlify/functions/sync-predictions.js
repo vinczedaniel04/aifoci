@@ -153,13 +153,14 @@ exports.handler = async function () {
 
  const { data: existingPredictions, error: existingPredictionsError } = await supabase
  .from("predictions_history")
- .select("match_id");
+ .select("*");
 
  if (existingPredictionsError) throw existingPredictionsError;
 
- const existingPredictionIds = new Set(
- (existingPredictions || []).map((row) => row.match_id)
- );
+ const existingPredictionMap = new Map();
+ for (const row of existingPredictions || []) {
+ existingPredictionMap.set(row.match_id, row);
+ }
 
  const formMap = new Map();
  for (const row of formRows || []) {
@@ -169,6 +170,7 @@ exports.handler = async function () {
  const rowsToInsert = [];
  const rowsToUpdateUnlocked = [];
  const rowsToUpdateLocked = [];
+ const rowsToPatch1X2 = [];
 
  for (const match of matches || []) {
  const homeForm = formMap.get(match.home_team_id);
@@ -177,6 +179,8 @@ exports.handler = async function () {
  if (!homeForm || !awayForm) {
  continue;
  }
+
+ const existingPrediction = existingPredictionMap.get(match.match_id);
 
  const statusUpper = (match.status || "").toUpperCase();
  const isFinished = statusUpper === "FINISHED";
@@ -194,8 +198,26 @@ exports.handler = async function () {
  ? `${match.full_time_home ?? 0}-${match.full_time_away ?? 0}`
  : null;
 
- // Ha már létezik ÉS locked státuszban van, nem számoljuk újra a predictiont
- if (existingPredictionIds.has(match.match_id) && isLockedStatus) {
+ const prediction = predictMatch(match, homeForm, awayForm);
+
+ // Ha már létezik és locked, normál esetben nem írjuk újra.
+ // KIVÉTEL: ha az új 1X2 mezők még hiányoznak, akkor csak azokat patch-eljük be.
+ if (existingPrediction && isLockedStatus) {
+ const missing1X2 =
+ existingPrediction.predicted_home_win_probability == null ||
+ existingPrediction.predicted_draw_probability == null ||
+ existingPrediction.predicted_away_win_probability == null;
+
+ if (missing1X2) {
+ rowsToPatch1X2.push({
+ match_id: match.match_id,
+ predicted_home_win_probability: prediction.predicted_home_win_probability,
+ predicted_draw_probability: prediction.predicted_draw_probability,
+ predicted_away_win_probability: prediction.predicted_away_win_probability,
+ updated_at: new Date().toISOString()
+ });
+ }
+
  rowsToUpdateLocked.push({
  match_id: match.match_id,
  status: match.status,
@@ -209,9 +231,6 @@ exports.handler = async function () {
 
  continue;
  }
-
- // Ha nincs lock, akkor friss predikció készülhet
- const prediction = predictMatch(match, homeForm, awayForm);
 
  const predictionRow = {
  match_id: match.match_id,
@@ -255,7 +274,7 @@ exports.handler = async function () {
  updated_at: new Date().toISOString()
  };
 
- if (existingPredictionIds.has(match.match_id)) {
+ if (existingPrediction) {
  rowsToUpdateUnlocked.push(predictionRow);
  } else {
  rowsToInsert.push(predictionRow);
@@ -270,7 +289,20 @@ exports.handler = async function () {
  if (insertError) throw insertError;
  }
 
- // Locked meccsek: csak live / status / actual mezők frissülnek
+ for (const row of rowsToPatch1X2) {
+ const { error: patchError } = await supabase
+ .from("predictions_history")
+ .update({
+ predicted_home_win_probability: row.predicted_home_win_probability,
+ predicted_draw_probability: row.predicted_draw_probability,
+ predicted_away_win_probability: row.predicted_away_win_probability,
+ updated_at: row.updated_at
+ })
+ .eq("match_id", row.match_id);
+
+ if (patchError) throw patchError;
+ }
+
  for (const row of rowsToUpdateLocked) {
  const { data: existingRow, error: existingRowError } = await supabase
  .from("predictions_history")
@@ -323,7 +355,6 @@ exports.handler = async function () {
  if (updateError) throw updateError;
  }
 
- // Nem lockolt, már létező meccsek: prediction is frissül
  for (const row of rowsToUpdateUnlocked) {
  const { error: updateError } = await supabase
  .from("predictions_history")
@@ -377,6 +408,7 @@ exports.handler = async function () {
  inserted: rowsToInsert.length,
  updated_locked: rowsToUpdateLocked.length,
  updated_unlocked: rowsToUpdateUnlocked.length,
+ patched_1x2_locked: rowsToPatch1X2.length,
  match_day: matchDay
  })
  };
