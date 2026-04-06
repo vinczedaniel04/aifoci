@@ -175,8 +175,6 @@ function getFinishedAnalysis(item) {
  const actualScore = `${home}-${away}`;
 
  return `
- <div class="matrix-wrap">
- <div class="matrix-title">AI ellenőrzés</div>
  <div class="grid">
  <div class="box">
  <span class="label">Valós végeredmény</span>
@@ -188,23 +186,58 @@ function getFinishedAnalysis(item) {
  </div>
  <div class="box">
  <span class="label">Pontos eredmény</span>
- <strong>${item.exact_hit ? " IGEN" : " NEM"}</strong>
+ <strong>${item.exact_hit ? "IGEN" : "NEM"}</strong>
  </div>
  <div class="box">
  <span class="label">Over 2.5 találat</span>
- <strong>${item.over25_hit ? " IGEN" : " NEM"}</strong>
+ <strong>${item.over25_hit ? "IGEN" : "NEM"}</strong>
  </div>
  <div class="box">
  <span class="label">BTTS találat</span>
- <strong>${item.btts_hit ? " IGEN" : " NEM"}</strong>
+ <strong>${item.btts_hit ? "IGEN" : "NEM"}</strong>
  </div>
  <div class="box">
  <span class="label">Összgól</span>
  <strong>${home + away}</strong>
  </div>
  </div>
+ `;
+}
+
+function createToggleSection(title, innerHtml) {
+ if (!innerHtml) return "";
+
+ const sectionId = `toggle-${Math.random().toString(36).slice(2, 10)}`;
+
+ return `
+ <div class="toggle-area">
+ <button class="toggle-btn" type="button" data-toggle-target="${sectionId}">
+ ${title}
+ </button>
+ <div class="toggle-content" id="${sectionId}">
+ ${innerHtml}
+ </div>
  </div>
  `;
+}
+
+function wireToggleButtons(rootEl) {
+ const buttons = rootEl.querySelectorAll("[data-toggle-target]");
+
+ buttons.forEach((btn) => {
+ btn.addEventListener("click", () => {
+ const targetId = btn.getAttribute("data-toggle-target");
+ const target = rootEl.querySelector(`#${targetId}`);
+ if (!target) return;
+
+ const isOpen = target.classList.contains("open");
+ target.classList.toggle("open");
+
+ btn.textContent = isOpen
+ ? btn.textContent.replace("elrejtése", "megnyitása")
+ : btn.textContent.replace("megnyitása", "elrejtése");
+ });
+ });
 }
 
 function createMatchCard(item) {
@@ -240,6 +273,12 @@ function createMatchCard(item) {
  const showScore = isFinished || isLive;
  const minute = isLive && item.minute ? `${item.minute}` : "";
 
+ const finishedAnalysisHtml = getFinishedAnalysis(item);
+ const goalMatrixHtml = renderGoalMatrix(
+ Number(item.predicted_home_goals || 0),
+ Number(item.predicted_away_goals || 0)
+ );
+
  const card = document.createElement("div");
  card.className = "card";
 
@@ -249,7 +288,7 @@ function createMatchCard(item) {
  <div class="teams-row">
  <div class="team-side">
  ${item.home_team_crest ? `<img src="${item.home_team_crest}" class="team-logo" alt="${item.home_team_name}">` : ""}
- <span>${item.home_team_name}</span>
+ <span class="team-name">${item.home_team_name}</span>
  ${showScore ? `<span class="team-score">${homeGoals}</span>` : ""}
  </div>
 
@@ -260,7 +299,7 @@ function createMatchCard(item) {
 
  <div class="team-side away-side">
  ${showScore ? `<span class="team-score">${awayGoals}</span>` : ""}
- <span>${item.away_team_name}</span>
+ <span class="team-name">${item.away_team_name}</span>
  ${item.away_team_crest ? `<img src="${item.away_team_crest}" class="team-logo" alt="${item.away_team_name}">` : ""}
  </div>
  </div>
@@ -311,13 +350,11 @@ function createMatchCard(item) {
 
  <div class="explanation">${item.explanation || ""}</div>
 
- ${getFinishedAnalysis(item)}
-
- ${renderGoalMatrix(
- Number(item.predicted_home_goals || 0),
- Number(item.predicted_away_goals || 0)
- )}
+ ${isFinished ? createToggleSection("AI ellenőrzés megnyitása", finishedAnalysisHtml) : ""}
+ ${createToggleSection("Gólmátrix megnyitása", goalMatrixHtml)}
  `;
+
+ wireToggleButtons(card);
 
  return card;
 }
@@ -406,7 +443,7 @@ function renderData(items) {
  const exactPct = ((stats.exact / stats.finished) * 100).toFixed(0);
 
  statBox.innerHTML = `
- <div class="teams"> AI napi teljesítmény</div>
+ <div class="teams">AI napi teljesítmény</div>
 
  <div class="grid">
  <div class="box">
