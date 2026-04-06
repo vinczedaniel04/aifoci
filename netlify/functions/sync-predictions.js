@@ -185,6 +185,9 @@ exports.handler = async function () {
         competition_name: match.competition_name,
         home_team_name: match.home_team_name,
         away_team_name: match.away_team_name,
+        home_team_crest: match.home_team_crest || null,
+        away_team_crest: match.away_team_crest || null,
+        competition_emblem: match.competition_emblem || null,
 
         predicted_score: prediction.predicted_score,
         predicted_home_goals: prediction.predicted_home_goals,

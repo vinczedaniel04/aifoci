@@ -220,7 +220,19 @@ function createMatchCard(item) {
 
   card.innerHTML = `
     ${statusBadge}
-    <div class="teams">${item.home_team_name} - ${item.away_team_name}</div>
+    <div class="teams-row">
+    <div class="team-side">
+      ${item.home_team_crest ? `<img src="${item.home_team_crest}" class="team-logo">`: ""}
+       <span>${item.home_team_name}</span>
+    </div>
+
+    <div class="vs">vs</div>
+
+    <div class="team-side away-side">
+    <span> ${item.away_team_name}</span>
+    ${item.away_team_crest ? `<img src="${item.away_team_crest}" class="team-logo"> `: ""}
+    </div>
+    </div>
     ${resultLine}
 
     <div class="grid">
@@ -273,10 +285,18 @@ function createLeagueBlock(leagueName, items, isOpen = false) {
   wrapper.className = "league-block";
 
   const header = document.createElement("button");
+
+  
+
   header.className = "league-header";
+
+  const emblem=item[0]?.competition_emblem||"";
   header.innerHTML = `
+    <span class="league-title-wrap">
+      ${emblem ? `<img src="${emblem}" class="league-logo">` : ""}
     <span>${leagueName}</span>
-    <span class="league-toggle-text">${items.length} meccs • lenyitás</span>
+    </span>
+    <span class="league-toggle-text">${items.length} meccs •  lenyitás}</span>
   `;
 
   const content = document.createElement("div");
