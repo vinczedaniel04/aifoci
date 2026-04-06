@@ -9,9 +9,11 @@ exports.handler = async function () {
  if (!supabaseUrl || !supabaseKey || !footballToken) {
  return {
  statusCode: 500,
- headers: { "content-type": "application/json" },
+ headers: {
+ "content-type": "application/json"
+ },
  body: JSON.stringify({
- error: "Hiányzó env változó"
+ error: "Hiányzó SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY vagy FOOTBALL_DATA_API_KEY"
  })
  };
  }
@@ -26,141 +28,260 @@ exports.handler = async function () {
  ).padStart(2, "0")}`;
  }
 
+ function getSeasonStartYearUtc() {
+ const now = new Date();
+ const year = now.getUTCFullYear();
+ const month = now.getUTCMonth() + 1;
+ return month >= 7 ? year : year - 1;
+ }
+
  const matchDay = getTodayUtcDate();
+ const season = getSeasonStartYearUtc();
 
  async function fetchJson(url) {
- const res = await fetch(url, {
+ const response = await fetch(url, {
  headers: {
  "X-Auth-Token": footballToken
  }
  });
 
- if (!res.ok) {
- throw new Error(await res.text());
+ if (!response.ok) {
+ const text = await response.text();
+ throw new Error(`${response.status} ${text}`);
  }
 
- return res.json();
+ return await response.json();
  }
 
- // mai csapatok
- const { data: matches } = await supabase
+ const { data: todayMatches, error: matchesError } = await supabase
  .from("matches")
- .select("home_team_id, home_team_name, away_team_id, away_team_name");
+ .select("home_team_id, home_team_name, away_team_id, away_team_name")
+ .order("match_date", { ascending: true });
 
- const teamMap = new Map();
+ if (matchesError) throw matchesError;
 
- for (const m of matches || []) {
- teamMap.set(m.home_team_id, {
- team_id: m.home_team_id,
- team_name: m.home_team_name
+ const teamsMap = new Map();
+
+ for (const match of todayMatches || []) {
+ teamsMap.set(match.home_team_id, {
+ team_id: match.home_team_id,
+ team_name: match.home_team_name
  });
 
- teamMap.set(m.away_team_id, {
- team_id: m.away_team_id,
- team_name: m.away_team_name
+ teamsMap.set(match.away_team_id, {
+ team_id: match.away_team_id,
+ team_name: match.away_team_name
  });
  }
 
- const teams = Array.from(teamMap.values());
+ const teams = Array.from(teamsMap.values());
 
- // már meglévő cache
- const { data: existing } = await supabase
+ const { data: seasonCacheRows, error: cacheError } = await supabase
  .from("team_form_cache")
- .select("team_id")
- .eq("match_day", matchDay);
+ .select("*")
+ .eq("season", season)
+ .order("updated_at", { ascending: false });
 
- const existingSet = new Set((existing || []).map(t => t.team_id));
+ if (cacheError) throw cacheError;
 
- // csak hiányzó csapatok
- const missingTeams = teams.filter(t => !existingSet.has(t.team_id));
+ const latestSeasonCacheByTeam = new Map();
+ const todayCacheTeamIds = new Set();
 
- // LIMIT: max 3 csapat / futás
- const batch = missingTeams.slice(0, 3);
-
- if (batch.length === 0) {
- return {
- statusCode: 200,
- body: JSON.stringify({
- ok: true,
- message: "Minden csapat kész"
- })
- };
+ for (const row of seasonCacheRows || []) {
+ if (!latestSeasonCacheByTeam.has(row.team_id)) {
+ latestSeasonCacheByTeam.set(row.team_id, row);
  }
 
- async function getLastFive(teamId) {
+ if (row.match_day === matchDay) {
+ todayCacheTeamIds.add(row.team_id);
+ }
+ }
+
+ const rowsToCopy = [];
+ const teamsToFetch = [];
+
+ for (const team of teams) {
+ const seasonCache = latestSeasonCacheByTeam.get(team.team_id);
+ const alreadyHasToday = todayCacheTeamIds.has(team.team_id);
+
+ if (alreadyHasToday) {
+ continue;
+ }
+
+ if (seasonCache) {
+ rowsToCopy.push({
+ ...seasonCache,
+ id: undefined,
+ match_day: matchDay,
+ updated_at: new Date().toISOString()
+ });
+ } else {
+ teamsToFetch.push(team);
+ }
+ }
+
+ if (rowsToCopy.length > 0) {
+ const cleanedRowsToCopy = rowsToCopy.map((row) => {
+ const { id, ...rest } = row;
+ return rest;
+ });
+
+ const { error: copyError } = await supabase
+ .from("team_form_cache")
+ .upsert(cleanedRowsToCopy, { onConflict: "match_day,team_id" });
+
+ if (copyError) throw copyError;
+ }
+
+ const batch = teamsToFetch.slice(0, 3);
+
+ async function getRecentFinishedMatches(teamId) {
  const data = await fetchJson(
- `${API_BASE}/teams/${teamId}/matches?status=FINISHED&limit=5`
+ `${API_BASE}/teams/${teamId}/matches?status=FINISHED&limit=40`
  );
  return data.matches || [];
  }
 
- function buildRow(team, matches) {
- if (!matches.length) {
+ function average(values, fallback = 0) {
+ if (!values.length) return fallback;
+ return Number(
+ (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)
+ );
+ }
+
+ function rate(values, fallback = 0) {
+ if (!values.length) return fallback;
+ return Number(
+ ((values.reduce((sum, value) => sum + value, 0) / values.length) * 100).toFixed(2)
+ );
+ }
+
+ function buildTeamFormRow(team, matches) {
+ const sortedMatches = [...matches].sort(
+ (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
+ );
+
+ const homeMatches = sortedMatches
+ .filter((m) => m.homeTeam?.id === team.team_id)
+ .slice(0, 10);
+
+ const awayMatches = sortedMatches
+ .filter((m) => m.awayTeam?.id === team.team_id)
+ .slice(0, 10);
+
+ function mapStats(matchList, isHome) {
+ return matchList.map((m) => {
+ const goalsFor = isHome
+ ? (m.score?.fullTime?.home ?? 0)
+ : (m.score?.fullTime?.away ?? 0);
+
+ const goalsAgainst = isHome
+ ? (m.score?.fullTime?.away ?? 0)
+ : (m.score?.fullTime?.home ?? 0);
+
+ return {
+ goalsFor,
+ goalsAgainst,
+ over25: goalsFor + goalsAgainst >= 3 ? 1 : 0,
+ btts: goalsFor > 0 && goalsAgainst > 0 ? 1 : 0,
+ win: goalsFor > goalsAgainst ? 1 : 0,
+ draw: goalsFor === goalsAgainst ? 1 : 0,
+ loss: goalsFor < goalsAgainst ? 1 : 0
+ };
+ });
+ }
+
+ const homeStats = mapStats(homeMatches, true);
+ const awayStats = mapStats(awayMatches, false);
+
+ const lastFinishedMatchDate =
+ sortedMatches.length > 0 ? sortedMatches[0].utcDate : null;
+
  return {
  match_day: matchDay,
+ season,
  team_id: team.team_id,
  team_name: team.team_name,
- avg_goals_for: 1.2,
- avg_goals_against: 1.2,
- avg_goals_for_home: 1.2,
- avg_goals_against_home: 1.2,
- avg_goals_for_away: 1.2,
- avg_goals_against_away: 1.2,
+
+ home_last_10_count: homeMatches.length,
+ away_last_10_count: awayMatches.length,
+
+ avg_goals_for: average(
+ [...homeStats, ...awayStats].map((x) => x.goalsFor),
+ 1.2
+ ),
+ avg_goals_against: average(
+ [...homeStats, ...awayStats].map((x) => x.goalsAgainst),
+ 1.2
+ ),
+
+ avg_goals_for_home: average(homeStats.map((x) => x.goalsFor), 1.2),
+ avg_goals_against_home: average(homeStats.map((x) => x.goalsAgainst), 1.2),
+ avg_goals_for_away: average(awayStats.map((x) => x.goalsFor), 1.0),
+ avg_goals_against_away: average(awayStats.map((x) => x.goalsAgainst), 1.0),
+
+ wins_last_5: [...homeStats, ...awayStats].slice(0, 5).filter((x) => x.win).length,
+ draws_last_5: [...homeStats, ...awayStats].slice(0, 5).filter((x) => x.draw).length,
+ losses_last_5: [...homeStats, ...awayStats].slice(0, 5).filter((x) => x.loss).length,
+
+ home_win_rate: rate(homeStats.map((x) => x.win), 0),
+ home_draw_rate: rate(homeStats.map((x) => x.draw), 0),
+ home_loss_rate: rate(homeStats.map((x) => x.loss), 0),
+
+ away_win_rate: rate(awayStats.map((x) => x.win), 0),
+ away_draw_rate: rate(awayStats.map((x) => x.draw), 0),
+ away_loss_rate: rate(awayStats.map((x) => x.loss), 0),
+
+ home_over25_rate: rate(homeStats.map((x) => x.over25), 0),
+ away_over25_rate: rate(awayStats.map((x) => x.over25), 0),
+
+ home_btts_rate: rate(homeStats.map((x) => x.btts), 0),
+ away_btts_rate: rate(awayStats.map((x) => x.btts), 0),
+
+ last_finished_match_date: lastFinishedMatchDate,
  updated_at: new Date().toISOString()
  };
  }
 
- let totalFor = 0;
- let totalAgainst = 0;
-
- for (const m of matches) {
- const isHome = m.homeTeam.id === team.team_id;
-
- const gf = isHome ? m.score.fullTime.home : m.score.fullTime.away;
- const ga = isHome ? m.score.fullTime.away : m.score.fullTime.home;
-
- totalFor += gf ?? 0;
- totalAgainst += ga ?? 0;
- }
-
- const count = matches.length;
-
- return {
- match_day: matchDay,
- team_id: team.team_id,
- team_name: team.team_name,
- avg_goals_for: Number((totalFor / count).toFixed(2)),
- avg_goals_against: Number((totalAgainst / count).toFixed(2)),
- updated_at: new Date().toISOString()
- };
- }
-
- const rows = [];
+ const fetchedRows = [];
 
  for (const team of batch) {
- const lastFive = await getLastFive(team.team_id);
- rows.push(buildRow(team, lastFive));
+ const recentMatches = await getRecentFinishedMatches(team.team_id);
+ fetchedRows.push(buildTeamFormRow(team, recentMatches));
+
+ await new Promise((resolve) => setTimeout(resolve, 1200));
  }
 
- const { error } = await supabase
+ if (fetchedRows.length > 0) {
+ const { error: upsertError } = await supabase
  .from("team_form_cache")
- .upsert(rows, { onConflict: "match_day,team_id" });
+ .upsert(fetchedRows, { onConflict: "match_day,team_id" });
 
- if (error) throw error;
+ if (upsertError) throw upsertError;
+ }
 
  return {
  statusCode: 200,
+ headers: {
+ "content-type": "application/json"
+ },
  body: JSON.stringify({
  ok: true,
- processed: batch.length,
- remaining: missingTeams.length - batch.length
+ copied_from_cache: rowsToCopy.length,
+ fetched_new: fetchedRows.length,
+ remaining_new_teams: Math.max(teamsToFetch.length - batch.length, 0),
+ season,
+ match_day: matchDay
  })
  };
- } catch (err) {
+ } catch (error) {
  return {
  statusCode: 500,
+ headers: {
+ "content-type": "application/json"
+ },
  body: JSON.stringify({
- error: err.message
+ error: error.message || "Ismeretlen hiba"
  })
  };
  }
