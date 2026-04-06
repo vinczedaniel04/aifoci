@@ -401,7 +401,7 @@ async function loadPredictions() {
       }
     }
 
-    const response = await fetch("/api/read-predictions");
+    const response = await fetch("/.netlify/functions/read-predictions");
     const data = await response.json();
 
     if (!response.ok) {
