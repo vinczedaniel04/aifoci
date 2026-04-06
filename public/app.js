@@ -370,10 +370,11 @@ function createLeagueBlock(leagueName, items, isOpen = false) {
 }
 
 function renderData(items) {
- listEl.innerHTML = "";
+ const newList = document.createElement("div");
 
  if (!items.length) {
  statusEl.textContent = "Nincs predikció az adatbázisban.";
+ listEl.innerHTML = "";
  return;
  }
 
@@ -413,7 +414,7 @@ function renderData(items) {
  </div>
  `;
 
- listEl.appendChild(statBox);
+ newList.appendChild(statBox);
  }
 
  const grouped = groupByLeague(items);
@@ -421,13 +422,16 @@ function renderData(items) {
 
  leagues.forEach((leagueName) => {
  const block = createLeagueBlock(leagueName, grouped[leagueName], false);
- listEl.appendChild(block);
+ newList.appendChild(block);
  });
+
+ listEl.replaceChildren(...newList.childNodes);
 }
 
-async function loadPredictions(forceRefresh = false) {
+async function loadPredictions(forceRefresh = false, silent = false) {
+ if (!silent) {
  statusEl.textContent = "Betöltés adatbázisból...";
- listEl.innerHTML = "";
+ }
 
  try {
  if (!forceRefresh) {
@@ -438,8 +442,10 @@ async function loadPredictions(forceRefresh = false) {
 
  if (Date.now() - parsed.time < CACHE_TIME) {
  renderData(parsed.data);
+ if (!silent) {
  statusEl.textContent = "Cache-ből betöltve";
- return;
+ }
+ return parsed.data;
  }
  }
  }
@@ -462,21 +468,29 @@ async function loadPredictions(forceRefresh = false) {
  );
 
  renderData(items);
+
+ if (!silent) {
  statusEl.textContent = `Betöltve DB-ből: ${items.length} predikció`;
+ }
+
+ return items;
  } catch (error) {
+ if (!silent) {
  statusEl.textContent = error.message || "Hiba történt.";
+ }
+ return [];
  }
 }
 
 reloadBtn.addEventListener("click", async () => {
  localStorage.removeItem(CACHE_KEY);
- await loadPredictions(true);
+ await loadPredictions(true, false);
 });
 
 window.addEventListener("DOMContentLoaded", async () => {
- await loadPredictions(true);
+ await loadPredictions(true, false);
 
  setInterval(() => {
- loadPredictions(true);
- }, 180000);
+ loadPredictions(true, true);
+ }, 180000); // 3 perc
 });
