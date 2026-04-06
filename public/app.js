@@ -5,6 +5,7 @@ const reloadBtn = document.getElementById("reloadBtn");
 const CACHE_KEY = "foci_predictions_cache";
 const CACHE_TIME = 5 * 60 * 1000;
 const OPEN_LEAGUES_KEY = "foci_open_leagues";
+const OPEN_MATCHES_KEY = "foci_open_matches";
 
 function factorial(n) {
  if (n <= 1) return 1;
@@ -240,6 +241,32 @@ function wireToggleButtons(rootEl) {
  });
 }
 
+function loadOpenLeagues() {
+ try {
+ const raw = localStorage.getItem(OPEN_LEAGUES_KEY);
+ return raw ? JSON.parse(raw) : {};
+ } catch {
+ return {};
+ }
+}
+
+function saveOpenLeagues(state) {
+ localStorage.setItem(OPEN_LEAGUES_KEY, JSON.stringify(state));
+}
+
+function loadOpenMatches() {
+ try {
+ const raw = localStorage.getItem(OPEN_MATCHES_KEY);
+ return raw ? JSON.parse(raw) : {};
+ } catch {
+ return {};
+ }
+}
+
+function saveOpenMatches(state) {
+ localStorage.setItem(OPEN_MATCHES_KEY, JSON.stringify(state));
+}
+
 function createMatchCard(item) {
  const statusBadge = getMatchStatusBadge(item);
 
@@ -273,6 +300,10 @@ function createMatchCard(item) {
  const showScore = isFinished || isLive;
  const minute = isLive && item.minute ? `${item.minute}` : "";
 
+ const matchKey = String(item.match_id);
+ const openMatches = loadOpenMatches();
+ const isOpen = !!openMatches[matchKey];
+
  const finishedAnalysisHtml = getFinishedAnalysis(item);
  const goalMatrixHtml = renderGoalMatrix(
  Number(item.predicted_home_goals || 0),
@@ -280,10 +311,14 @@ function createMatchCard(item) {
  );
 
  const card = document.createElement("div");
- card.className = "card";
+ card.className = "card match-card";
 
  card.innerHTML = `
+ <button class="match-header" type="button">
+ <div class="match-header-top">
  ${statusBadge}
+ <div class="match-toggle-text">${isOpen ? "összecsukás" : "lenyitás"}</div>
+ </div>
 
  <div class="teams-row">
  <div class="team-side">
@@ -305,7 +340,9 @@ function createMatchCard(item) {
  </div>
 
  ${resultLine}
+ </button>
 
+ <div class="match-body ${isOpen ? "open" : ""}">
  <div class="grid">
  <div class="box">
  <span class="label">Legvalószínűbb eredmény</span>
@@ -352,29 +389,38 @@ function createMatchCard(item) {
 
  ${isFinished ? createToggleSection("AI ellenőrzés megnyitása", finishedAnalysisHtml) : ""}
  ${createToggleSection("Gólmátrix megnyitása", goalMatrixHtml)}
+ </div>
  `;
+
+ const headerBtn = card.querySelector(".match-header");
+ const body = card.querySelector(".match-body");
+ const toggleText = card.querySelector(".match-toggle-text");
+
+ headerBtn.addEventListener("click", () => {
+ const nowOpen = body.classList.toggle("open");
+ toggleText.textContent = nowOpen ? "összecsukás" : "lenyitás";
+
+ const current = loadOpenMatches();
+ current[matchKey] = nowOpen;
+ saveOpenMatches(current);
+ });
 
  wireToggleButtons(card);
 
  return card;
 }
 
-function loadOpenLeagues() {
- try {
- const raw = localStorage.getItem(OPEN_LEAGUES_KEY);
- return raw ? JSON.parse(raw) : {};
- } catch {
- return {};
- }
-}
-
-function saveOpenLeagues(state) {
- localStorage.setItem(OPEN_LEAGUES_KEY, JSON.stringify(state));
-}
-
 function createLeagueBlock(leagueName, items) {
  const openState = loadOpenLeagues();
  const isOpen = !!openState[leagueName];
+
+ const liveCount = items.filter((x) =>
+ ["LIVE", "IN_PLAY", "PAUSED"].includes((x.status || "").toUpperCase())
+ ).length;
+
+ const finishedCount = items.filter(
+ (x) => (x.status || "").toUpperCase() === "FINISHED"
+ ).length;
 
  const wrapper = document.createElement("section");
  wrapper.className = "league-block";
@@ -389,7 +435,11 @@ function createLeagueBlock(leagueName, items) {
  ${emblem ? `<img src="${emblem}" class="league-logo" alt="${leagueName}">` : ""}
  <span>${leagueName}</span>
  </span>
- <span class="league-toggle-text">${items.length} meccs • ${isOpen ? "összecsukás" : "lenyitás"}</span>
+
+ <span class="league-meta">
+ ${liveCount > 0 ? `<span class="league-live-pill">${liveCount} élő</span>` : ""}
+ <span class="league-toggle-text">${items.length} meccs • ${finishedCount} kész • ${isOpen ? "összecsukás" : "lenyitás"}</span>
+ </span>
  `;
 
  const content = document.createElement("div");
@@ -409,7 +459,7 @@ function createLeagueBlock(leagueName, items) {
 
  const toggleText = header.querySelector(".league-toggle-text");
  if (toggleText) {
- toggleText.textContent = `${items.length} meccs • ${nowOpen ? "összecsukás" : "lenyitás"}`;
+ toggleText.textContent = `${items.length} meccs • ${finishedCount} kész • ${nowOpen ? "összecsukás" : "lenyitás"}`;
  }
 
  const currentState = loadOpenLeagues();
@@ -436,14 +486,14 @@ function renderData(items) {
 
  if (stats.finished > 0) {
  const statBox = document.createElement("div");
- statBox.className = "card";
+ statBox.className = "card top-stat-card";
 
  const overPct = ((stats.over / stats.finished) * 100).toFixed(0);
  const bttsPct = ((stats.btts / stats.finished) * 100).toFixed(0);
  const exactPct = ((stats.exact / stats.finished) * 100).toFixed(0);
 
  statBox.innerHTML = `
- <div class="teams">AI napi teljesítmény</div>
+ <div class="top-stat-title">AI napi teljesítmény</div>
 
  <div class="grid">
  <div class="box">

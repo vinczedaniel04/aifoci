@@ -21,7 +21,7 @@ error: "Hiányzó FOOTBALL_DATA_API_KEY vagy SUPABASE beállítás"
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const API_BASE = "https://api.football-data.org/v4";
-const COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1"];
+const COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1","CL", "EL","UCL"];
 
 async function fetchJson(url) {
 const response = await fetch(url, {
