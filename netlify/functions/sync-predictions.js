@@ -43,7 +43,7 @@ exports.handler = async function () {
  const totalExpectedGoals = expectedHomeGoals + expectedAwayGoals;
  const safeTotal = totalExpectedGoals <= 0 ? 0.1 : totalExpectedGoals;
  const baseCorners = 8.0;
- const totalCorners = baseCorners + totalExpectedGoals * 1.9;
+ const totalCorners = baseCorners + totalExpectedGoals * 1.75;
 
  return {
  total: Number(totalCorners.toFixed(2)),
@@ -58,30 +58,42 @@ exports.handler = async function () {
 
  let totalCards = 3.6;
 
- if (goalDiff < 0.4) totalCards += 1.1;
- else if (goalDiff < 0.8) totalCards += 0.6;
+ if (goalDiff < 0.35) totalCards += 1.0;
+ else if (goalDiff < 0.7) totalCards += 0.5;
 
- if (totalExpectedGoals < 2.2) totalCards += 0.8;
- else if (totalExpectedGoals > 3.2) totalCards -= 0.3;
+ if (totalExpectedGoals < 2.2) totalCards += 0.6;
+ else if (totalExpectedGoals > 3.4) totalCards -= 0.2;
 
  return {
  total: Number(totalCards.toFixed(2))
  };
  }
 
+ function clamp(value, min, max) {
+ return Math.max(min, Math.min(max, value));
+ }
+
  function predictMatch(match, homeForm, awayForm) {
- const homeAttack =
- Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
- const homeDefense =
- Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
+ const homeAttack = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
+ const homeDefense = Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
 
- const awayAttack =
- Number(awayForm.avg_goals_for_away ?? awayForm.avg_goals_for ?? 1.0);
- const awayDefense =
- Number(awayForm.avg_goals_against_away ?? awayForm.avg_goals_against ?? 1.0);
+ const awayAttack = Number(awayForm.avg_goals_for_away ?? awayForm.avg_goals_for ?? 1.0);
+ const awayDefense = Number(awayForm.avg_goals_against_away ?? awayForm.avg_goals_against ?? 1.0);
 
- const expectedHomeGoals = ((homeAttack + awayDefense) / 2) + 0.15;
- const expectedAwayGoals = (awayAttack + homeDefense) / 2;
+ const homeWinRate = Number(homeForm.home_win_rate ?? 0);
+ const awayWinRate = Number(awayForm.away_win_rate ?? 0);
+
+ const homeFormBoost = (homeWinRate - awayWinRate) / 400;
+ const homeAdvantage = 0.08;
+
+ let expectedHomeGoals =
+ ((homeAttack + awayDefense) / 2) + homeAdvantage + homeFormBoost;
+
+ let expectedAwayGoals =
+ ((awayAttack + homeDefense) / 2) - (homeFormBoost / 2);
+
+ expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.2, 3.2);
+ expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.2, 3.0);
 
  let bestProbability = 0;
  let bestScore = "0-0";
@@ -91,8 +103,8 @@ exports.handler = async function () {
  let draw = 0;
  let awayWin = 0;
 
- for (let h = 0; h <= 5; h += 1) {
- for (let a = 0; a <= 5; a += 1) {
+ for (let h = 0; h <= 6; h += 1) {
+ for (let a = 0; a <= 6; a += 1) {
  const probability =
  poisson(expectedHomeGoals, h) * poisson(expectedAwayGoals, a);
 
@@ -110,8 +122,28 @@ exports.handler = async function () {
  }
  }
 
+ const probabilitySum = homeWin + draw + awayWin;
+
+ if (probabilitySum > 0) {
+ homeWin /= probabilitySum;
+ draw /= probabilitySum;
+ awayWin /= probabilitySum;
+ }
+
  const corners = estimateCorners(expectedHomeGoals, expectedAwayGoals);
  const cards = estimateCards(expectedHomeGoals, expectedAwayGoals);
+
+ const totalGoals = expectedHomeGoals + expectedAwayGoals;
+
+ let finalOver25Tip = "2,5 ALATT";
+ if (over25 >= 0.6 && totalGoals >= 2.6) {
+ finalOver25Tip = "2,5 FELETT";
+ }
+
+ let finalBttsTip = "NG";
+ if (btts >= 0.6 && expectedHomeGoals >= 0.95 && expectedAwayGoals >= 0.95) {
+ finalBttsTip = "GG";
+ }
 
  const strongerSide =
  expectedHomeGoals >= expectedAwayGoals
@@ -122,6 +154,7 @@ exports.handler = async function () {
  predicted_score: bestScore,
  predicted_home_goals: Number(expectedHomeGoals.toFixed(2)),
  predicted_away_goals: Number(expectedAwayGoals.toFixed(2)),
+ predicted_total_goals: Number(totalGoals.toFixed(2)),
  predicted_over25_probability: Number((over25 * 100).toFixed(2)),
  predicted_btts_probability: Number((btts * 100).toFixed(2)),
  predicted_home_win_probability: Number((homeWin * 100).toFixed(2)),
@@ -129,7 +162,9 @@ exports.handler = async function () {
  predicted_away_win_probability: Number((awayWin * 100).toFixed(2)),
  predicted_corners_total: corners.total,
  predicted_cards_total: cards.total,
- explanation: `A modell 10 hazai és 10 idegenbeli szezonmeccsből számol. A várható gólok alapján ${match.home_team_name} ${expectedHomeGoals.toFixed(
+ final_over25_tip: finalOver25Tip,
+ final_btts_tip: finalBttsTip,
+ explanation: `A modell súlyozott, 15 hazai és 15 idegenbeli szezonmeccsből számol. A várható gólok alapján ${match.home_team_name} ${expectedHomeGoals.toFixed(
  2
  )}, ${match.away_team_name} ${expectedAwayGoals.toFixed(
  2
@@ -200,8 +235,6 @@ exports.handler = async function () {
 
  const prediction = predictMatch(match, homeForm, awayForm);
 
- // Ha már létezik és locked, normál esetben nem írjuk újra.
- // KIVÉTEL: ha az új 1X2 mezők még hiányoznak, akkor csak azokat patch-eljük be.
  if (existingPrediction && isLockedStatus) {
  const missing1X2 =
  existingPrediction.predicted_home_win_probability == null ||
