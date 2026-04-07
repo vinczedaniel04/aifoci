@@ -332,7 +332,7 @@ function createMatchCard(item) {
  Number(item.predicted_over25_probability || 0) >= 50 ? "2,5 FELETT" : "2,5 ALATT";
 
  const predictedBttsText =
- Number(item.predicted_btts_probability || 0) >= 50 ? "GG" : "NG";
+ Number(item.predicted_btts_probability || 0) >= 50 ? "Igen" : "Nem";
 
  const aiTipHtml = `
  <div class="detail-grid">
