@@ -8,9 +8,7 @@ exports.handler = async function () {
  if (!supabaseUrl || !supabaseKey) {
  return {
  statusCode: 500,
- headers: {
- "content-type": "application/json"
- },
+ headers: { "content-type": "application/json" },
  body: JSON.stringify({
  error: "Hiányzó SUPABASE_URL vagy SUPABASE_SERVICE_ROLE_KEY"
  })
@@ -37,6 +35,10 @@ exports.handler = async function () {
 
  function poisson(lambda, k) {
  return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
+ }
+
+ function clamp(value, min, max) {
+ return Math.max(min, Math.min(max, value));
  }
 
  function estimateCorners(expectedHomeGoals, expectedAwayGoals) {
@@ -69,11 +71,20 @@ exports.handler = async function () {
  };
  }
 
- function clamp(value, min, max) {
- return Math.max(min, Math.min(max, value));
+ const { data: settingsRow, error: settingsError } = await supabase
+ .from("model_settings")
+ .select("*")
+ .eq("is_active", true)
+ .order("updated_at", { ascending: false })
+ .limit(1)
+ .maybeSingle();
+
+ if (settingsError) throw settingsError;
+ if (!settingsRow) {
+ throw new Error("Nincs aktív model_settings sor.");
  }
 
- function predictMatch(match, homeForm, awayForm) {
+ function predictMatch(match, homeForm, awayForm, settings) {
  const homeAttack = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
  const homeDefense = Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
 
@@ -83,17 +94,21 @@ exports.handler = async function () {
  const homeWinRate = Number(homeForm.home_win_rate ?? 0);
  const awayWinRate = Number(awayForm.away_win_rate ?? 0);
 
- const homeFormBoost = (homeWinRate - awayWinRate) / 400;
- const homeAdvantage = 0.08;
+ const homeFormBoost = (homeWinRate - awayWinRate) / 450;
 
  let expectedHomeGoals =
- ((homeAttack + awayDefense) / 2) + homeAdvantage + homeFormBoost;
+ (homeAttack * Number(settings.home_attack_weight || 0.5)) +
+ (awayDefense * Number(settings.away_defense_weight || 0.5)) +
+ Number(settings.home_advantage || 0.08) +
+ homeFormBoost;
 
  let expectedAwayGoals =
- ((awayAttack + homeDefense) / 2) - (homeFormBoost / 2);
+ (awayAttack * Number(settings.away_attack_weight || 0.5)) +
+ (homeDefense * Number(settings.home_defense_weight || 0.5)) -
+ (homeFormBoost / 2);
 
- expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.2, 3.2);
- expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.2, 3.0);
+ expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.2, 3.0);
+ expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.2, 2.8);
 
  let bestProbability = 0;
  let bestScore = "0-0";
@@ -123,7 +138,6 @@ exports.handler = async function () {
  }
 
  const probabilitySum = homeWin + draw + awayWin;
-
  if (probabilitySum > 0) {
  homeWin /= probabilitySum;
  draw /= probabilitySum;
@@ -132,16 +146,22 @@ exports.handler = async function () {
 
  const corners = estimateCorners(expectedHomeGoals, expectedAwayGoals);
  const cards = estimateCards(expectedHomeGoals, expectedAwayGoals);
-
  const totalGoals = expectedHomeGoals + expectedAwayGoals;
 
  let finalOver25Tip = "2,5 ALATT";
- if (over25 >= 0.6 && totalGoals >= 2.6) {
+ if (
+ over25 >= Number(settings.over25_threshold || 0.6) &&
+ totalGoals >= Number(settings.min_total_goals_for_over || 2.6)
+ ) {
  finalOver25Tip = "2,5 FELETT";
  }
 
  let finalBttsTip = "NG";
- if (btts >= 0.6 && expectedHomeGoals >= 0.95 && expectedAwayGoals >= 0.95) {
+ if (
+ btts >= Number(settings.btts_threshold || 0.6) &&
+ expectedHomeGoals >= Number(settings.min_team_goal_for_btts || 0.95) &&
+ expectedAwayGoals >= Number(settings.min_team_goal_for_btts || 0.95)
+ ) {
  finalBttsTip = "GG";
  }
 
@@ -164,7 +184,10 @@ exports.handler = async function () {
  predicted_cards_total: cards.total,
  final_over25_tip: finalOver25Tip,
  final_btts_tip: finalBttsTip,
- explanation: `A modell súlyozott, 15 hazai és 15 idegenbeli szezonmeccsből számol. A várható gólok alapján ${match.home_team_name} ${expectedHomeGoals.toFixed(
+ used_home_advantage: Number(settings.home_advantage || 0.08),
+ used_over25_threshold: Number(settings.over25_threshold || 0.6),
+ used_btts_threshold: Number(settings.btts_threshold || 0.6),
+ explanation: `A modell súlyozott szezonstatisztikából számol. A várható gólok alapján ${match.home_team_name} ${expectedHomeGoals.toFixed(
  2
  )}, ${match.away_team_name} ${expectedAwayGoals.toFixed(
  2
@@ -211,9 +234,7 @@ exports.handler = async function () {
  const homeForm = formMap.get(match.home_team_id);
  const awayForm = formMap.get(match.away_team_id);
 
- if (!homeForm || !awayForm) {
- continue;
- }
+ if (!homeForm || !awayForm) continue;
 
  const existingPrediction = existingPredictionMap.get(match.match_id);
 
@@ -233,7 +254,7 @@ exports.handler = async function () {
  ? `${match.full_time_home ?? 0}-${match.full_time_away ?? 0}`
  : null;
 
- const prediction = predictMatch(match, homeForm, awayForm);
+ const prediction = predictMatch(match, homeForm, awayForm, settingsRow);
 
  if (existingPrediction && isLockedStatus) {
  const missing1X2 =
@@ -247,6 +268,11 @@ exports.handler = async function () {
  predicted_home_win_probability: prediction.predicted_home_win_probability,
  predicted_draw_probability: prediction.predicted_draw_probability,
  predicted_away_win_probability: prediction.predicted_away_win_probability,
+ final_over25_tip: prediction.final_over25_tip,
+ final_btts_tip: prediction.final_btts_tip,
+ used_home_advantage: prediction.used_home_advantage,
+ used_over25_threshold: prediction.used_over25_threshold,
+ used_btts_threshold: prediction.used_btts_threshold,
  updated_at: new Date().toISOString()
  });
  }
@@ -292,16 +318,21 @@ exports.handler = async function () {
  predicted_away_win_probability: prediction.predicted_away_win_probability,
  predicted_corners_total: prediction.predicted_corners_total,
  predicted_cards_total: prediction.predicted_cards_total,
+ final_over25_tip: prediction.final_over25_tip,
+ final_btts_tip: prediction.final_btts_tip,
+ used_home_advantage: prediction.used_home_advantage,
+ used_over25_threshold: prediction.used_over25_threshold,
+ used_btts_threshold: prediction.used_btts_threshold,
  explanation: prediction.explanation,
 
  actual_home_goals: isFinished ? match.full_time_home : null,
  actual_away_goals: isFinished ? match.full_time_away : null,
  exact_hit: isFinished ? prediction.predicted_score === actualScore : null,
  over25_hit: isFinished
- ? (prediction.predicted_over25_probability >= 50) === (actualTotal > 2.5)
+ ? (prediction.final_over25_tip === "2,5 FELETT") === (actualTotal > 2.5)
  : null,
  btts_hit: isFinished
- ? (prediction.predicted_btts_probability >= 50) === actualBtts
+ ? (prediction.final_btts_tip === "GG") === actualBtts
  : null,
 
  updated_at: new Date().toISOString()
@@ -329,6 +360,11 @@ exports.handler = async function () {
  predicted_home_win_probability: row.predicted_home_win_probability,
  predicted_draw_probability: row.predicted_draw_probability,
  predicted_away_win_probability: row.predicted_away_win_probability,
+ final_over25_tip: row.final_over25_tip,
+ final_btts_tip: row.final_btts_tip,
+ used_home_advantage: row.used_home_advantage,
+ used_over25_threshold: row.used_over25_threshold,
+ used_btts_threshold: row.used_btts_threshold,
  updated_at: row.updated_at
  })
  .eq("match_id", row.match_id);
@@ -340,7 +376,7 @@ exports.handler = async function () {
  const { data: existingRow, error: existingRowError } = await supabase
  .from("predictions_history")
  .select(
- "predicted_score, predicted_over25_probability, predicted_btts_probability"
+ "predicted_score, final_over25_tip, final_btts_tip"
  )
  .eq("match_id", row.match_id)
  .maybeSingle();
@@ -361,12 +397,8 @@ exports.handler = async function () {
  (row.actual_home_goals ?? 0) > 0 && (row.actual_away_goals ?? 0) > 0;
 
  exact_hit = existingRow.predicted_score === actualScore;
- over25_hit =
- (Number(existingRow.predicted_over25_probability || 0) >= 50) ===
- (actualTotal > 2.5);
- btts_hit =
- (Number(existingRow.predicted_btts_probability || 0) >= 50) ===
- actualBtts;
+ over25_hit = (existingRow.final_over25_tip === "2,5 FELETT") === (actualTotal > 2.5);
+ btts_hit = (existingRow.final_btts_tip === "GG") === actualBtts;
  }
 
  const { error: updateError } = await supabase
@@ -417,6 +449,11 @@ exports.handler = async function () {
  predicted_away_win_probability: row.predicted_away_win_probability,
  predicted_corners_total: row.predicted_corners_total,
  predicted_cards_total: row.predicted_cards_total,
+ final_over25_tip: row.final_over25_tip,
+ final_btts_tip: row.final_btts_tip,
+ used_home_advantage: row.used_home_advantage,
+ used_over25_threshold: row.used_over25_threshold,
+ used_btts_threshold: row.used_btts_threshold,
  explanation: row.explanation,
 
  actual_home_goals: row.actual_home_goals,
@@ -433,9 +470,7 @@ exports.handler = async function () {
 
  return {
  statusCode: 200,
- headers: {
- "content-type": "application/json"
- },
+ headers: { "content-type": "application/json" },
  body: JSON.stringify({
  ok: true,
  inserted: rowsToInsert.length,
@@ -448,9 +483,7 @@ exports.handler = async function () {
  } catch (error) {
  return {
  statusCode: 500,
- headers: {
- "content-type": "application/json"
- },
+ headers: { "content-type": "application/json" },
  body: JSON.stringify({
  error: error.message || "Ismeretlen hiba"
  })
