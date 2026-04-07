@@ -41,11 +41,16 @@ exports.handler = async function () {
  return Math.max(min, Math.min(max, value));
  }
 
+ function softCapRate(ratePercent) {
+ const safe = Math.min(Number(ratePercent || 0), 75);
+ return safe / 100;
+ }
+
  function estimateCorners(expectedHomeGoals, expectedAwayGoals) {
  const totalExpectedGoals = expectedHomeGoals + expectedAwayGoals;
  const safeTotal = totalExpectedGoals <= 0 ? 0.1 : totalExpectedGoals;
  const baseCorners = 8.0;
- const totalCorners = baseCorners + totalExpectedGoals * 1.75;
+ const totalCorners = baseCorners + totalExpectedGoals * 1.65;
 
  return {
  total: Number(totalCorners.toFixed(2)),
@@ -60,10 +65,10 @@ exports.handler = async function () {
 
  let totalCards = 3.6;
 
- if (goalDiff < 0.35) totalCards += 1.0;
- else if (goalDiff < 0.7) totalCards += 0.5;
+ if (goalDiff < 0.35) totalCards += 0.9;
+ else if (goalDiff < 0.7) totalCards += 0.4;
 
- if (totalExpectedGoals < 2.2) totalCards += 0.6;
+ if (totalExpectedGoals < 2.2) totalCards += 0.5;
  else if (totalExpectedGoals > 3.4) totalCards -= 0.2;
 
  return {
@@ -85,30 +90,43 @@ exports.handler = async function () {
  }
 
  function predictMatch(match, homeForm, awayForm, settings) {
- const homeAttack = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
- const homeDefense = Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
+ const homeAttackRaw = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
+ const homeDefenseRaw = Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
 
- const awayAttack = Number(awayForm.avg_goals_for_away ?? awayForm.avg_goals_for ?? 1.0);
- const awayDefense = Number(awayForm.avg_goals_against_away ?? awayForm.avg_goals_against ?? 1.0);
+ const awayAttackRaw = Number(awayForm.avg_goals_for_away ?? awayForm.avg_goals_for ?? 1.0);
+ const awayDefenseRaw = Number(awayForm.avg_goals_against_away ?? awayForm.avg_goals_against ?? 1.0);
 
- const homeWinRate = Number(homeForm.home_win_rate ?? 0);
- const awayWinRate = Number(awayForm.away_win_rate ?? 0);
+ const homeWinRate = softCapRate(homeForm.home_win_rate);
+ const awayWinRate = softCapRate(awayForm.away_win_rate);
 
- const homeFormBoost = (homeWinRate - awayWinRate) / 450;
+ const homeLeagueStrength = Number(homeForm.source_league_strength ?? 0.90);
+ const awayLeagueStrength = Number(awayForm.source_league_strength ?? 0.90);
+
+ const homeAttack = homeAttackRaw * homeLeagueStrength;
+ const homeDefense = homeDefenseRaw / homeLeagueStrength;
+
+ const awayAttack = awayAttackRaw * awayLeagueStrength;
+ const awayDefense = awayDefenseRaw / awayLeagueStrength;
+
+ const homeStrengthBoost = (homeWinRate - awayWinRate) * 0.18;
+ const leagueBalanceBoost = (homeLeagueStrength - awayLeagueStrength) * 0.20;
+ const homeAdvantage = Number(settings.home_advantage || 0.08);
 
  let expectedHomeGoals =
  (homeAttack * Number(settings.home_attack_weight || 0.5)) +
  (awayDefense * Number(settings.away_defense_weight || 0.5)) +
- Number(settings.home_advantage || 0.08) +
- homeFormBoost;
+ homeAdvantage +
+ homeStrengthBoost +
+ leagueBalanceBoost;
 
  let expectedAwayGoals =
  (awayAttack * Number(settings.away_attack_weight || 0.5)) +
  (homeDefense * Number(settings.home_defense_weight || 0.5)) -
- (homeFormBoost / 2);
+ (homeStrengthBoost * 0.35) -
+ (leagueBalanceBoost * 0.50);
 
- expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.2, 3.0);
- expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.2, 2.8);
+ expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.35, 2.8);
+ expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.35, 2.6);
 
  let bestProbability = 0;
  let bestScore = "0-0";
@@ -187,7 +205,7 @@ exports.handler = async function () {
  used_home_advantage: Number(settings.home_advantage || 0.08),
  used_over25_threshold: Number(settings.over25_threshold || 0.6),
  used_btts_threshold: Number(settings.btts_threshold || 0.6),
- explanation: `A modell súlyozott szezonstatisztikából számol. A várható gólok alapján ${match.home_team_name} ${expectedHomeGoals.toFixed(
+ explanation: `A modell súlyozott forma, ligaerő és visszamért küszöbök alapján számol. A várható gólok: ${match.home_team_name} ${expectedHomeGoals.toFixed(
  2
  )}, ${match.away_team_name} ${expectedAwayGoals.toFixed(
  2
@@ -375,9 +393,7 @@ exports.handler = async function () {
  for (const row of rowsToUpdateLocked) {
  const { data: existingRow, error: existingRowError } = await supabase
  .from("predictions_history")
- .select(
- "predicted_score, final_over25_tip, final_btts_tip"
- )
+ .select("predicted_score, final_over25_tip, final_btts_tip")
  .eq("match_id", row.match_id)
  .maybeSingle();
 
