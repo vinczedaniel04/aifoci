@@ -755,26 +755,39 @@ font-size: 13px;
 }
 
 .market-row {
-grid-template-columns: 1fr;
-gap: 12px;
+grid-template-columns: repeat(3,minmax(0, 1fr));
+gap: 10px;
 }
 
 .market-pill {
 min-height: 76px;
 padding: 12px 16px;
+border-radius: 20px;
+flex-direction: column;
+justify-content: center;
+gap: 6px;
+}
+
+.market-pill.draw {
+gap: 6px;
 }
 
 .market-right {
-font-size: 22px;
+font-size: 18px;
 }
 
 .market-left {
-font-size: 22px;
+font-size: 18px;
+min-width: 0px;
 }
 
 .market-logo {
-width: 32px;
-height: 32px;
+width: 26px;
+height: 26px;
+}
+
+.market-short {
+font-size: 18px;
 }
 
 .compact-grid {
