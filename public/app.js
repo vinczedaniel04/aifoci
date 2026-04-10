@@ -1,6 +1,5 @@
 const statusEl = document.getElementById("status");
 const listEl = document.getElementById("list");
-const reloadBtn = document.getElementById("reloadBtn");
 const aiStatsEl = document.getElementById("ai-stats");
 
 const CACHE_KEY = "foci_predictions_cache";
@@ -531,11 +530,7 @@ const toggleBtn = aiStatsEl.querySelector(".top-stat-toggle");
 const body = aiStatsEl.querySelector(".top-stat-body");
 const arrow = aiStatsEl.querySelector(".arrow");
 
-toggleBtn.addEventListener("click", () => {
-const nowOpen = body.classList.toggle("open");
-arrow.classList.toggle("open", nowOpen);
-localStorage.setItem(OPEN_STATS_KEY, String(nowOpen));
-});
+
 }
 
 function renderData(payload) {
@@ -611,10 +606,6 @@ async function loadPredictions(forceRefresh = false, silent = false) {
  }
 }
 
-reloadBtn.addEventListener("click", async () => {
- localStorage.removeItem(CACHE_KEY);
- await loadPredictions(true, false);
-});
 
 window.addEventListener("DOMContentLoaded", async () => {
  await loadPredictions(true, false);
