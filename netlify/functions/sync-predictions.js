@@ -42,8 +42,12 @@ exports.handler = async function () {
  }
 
  function softCapRate(ratePercent) {
- const safe = Math.min(Number(ratePercent || 0), 75);
+ const safe = Math.min(Number(ratePercent || 0), 72);
  return safe / 100;
+ }
+
+ function regressTowardMean(value, mean = 1.55, strength = 0.35) {
+ return (value * (1 - strength)) + (mean * strength);
  }
 
  function estimateCorners(expectedHomeGoals, expectedAwayGoals) {
@@ -85,9 +89,7 @@ exports.handler = async function () {
  .maybeSingle();
 
  if (settingsError) throw settingsError;
- if (!settingsRow) {
- throw new Error("Nincs aktív model_settings sor.");
- }
+ if (!settingsRow) throw new Error("Nincs aktív model_settings sor.");
 
  function predictMatch(match, homeForm, awayForm, settings) {
  const homeAttackRaw = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
@@ -102,31 +104,47 @@ exports.handler = async function () {
  const homeLeagueStrength = Number(homeForm.source_league_strength ?? 0.90);
  const awayLeagueStrength = Number(awayForm.source_league_strength ?? 0.90);
 
- const homeAttack = homeAttackRaw * homeLeagueStrength;
- const homeDefense = homeDefenseRaw / homeLeagueStrength;
+ const homeAttack = regressTowardMean(homeAttackRaw, 1.70, 0.38) * homeLeagueStrength;
+ const awayAttack = regressTowardMean(awayAttackRaw, 1.45, 0.38) * awayLeagueStrength;
 
- const awayAttack = awayAttackRaw * awayLeagueStrength;
- const awayDefense = awayDefenseRaw / awayLeagueStrength;
+ const homeDefense = regressTowardMean(homeDefenseRaw, 1.10, 0.32) / homeLeagueStrength;
+ const awayDefense = regressTowardMean(awayDefenseRaw, 1.10, 0.32) / awayLeagueStrength;
 
- const homeStrengthBoost = (homeWinRate - awayWinRate) * 0.18;
- const leagueBalanceBoost = (homeLeagueStrength - awayLeagueStrength) * 0.20;
- const homeAdvantage = Number(settings.home_advantage || 0.08);
+ const homeStrengthBoost = (homeWinRate - awayWinRate) * 0.08;
+ const leagueBalanceBoost = (homeLeagueStrength - awayLeagueStrength) * 0.10;
+ const homeAdvantage = Number(settings.home_advantage || 0.05);
 
  let expectedHomeGoals =
- (homeAttack * Number(settings.home_attack_weight || 0.5)) +
- (awayDefense * Number(settings.away_defense_weight || 0.5)) +
+ (homeAttack * Number(settings.home_attack_weight || 0.52)) +
+ (awayDefense * Number(settings.away_defense_weight || 0.48)) +
  homeAdvantage +
  homeStrengthBoost +
  leagueBalanceBoost;
 
  let expectedAwayGoals =
- (awayAttack * Number(settings.away_attack_weight || 0.5)) +
- (homeDefense * Number(settings.home_defense_weight || 0.5)) -
- (homeStrengthBoost * 0.35) -
- (leagueBalanceBoost * 0.50);
+ (awayAttack * Number(settings.away_attack_weight || 0.52)) +
+ (homeDefense * Number(settings.home_defense_weight || 0.48)) -
+ (homeStrengthBoost * 0.20) -
+ (leagueBalanceBoost * 0.30);
 
- expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.35, 2.8);
- expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.35, 2.6);
+ const bothStrong =
+ homeLeagueStrength >= 0.93 &&
+ awayLeagueStrength >= 0.93 &&
+ awayAttackRaw >= 1.6 &&
+ homeAttackRaw >= 1.6;
+
+ if (bothStrong) {
+ const diff = expectedHomeGoals - expectedAwayGoals;
+ if (Math.abs(diff) > 0.28) {
+ const correctedDiff = diff * 0.55;
+ const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
+ expectedHomeGoals = avg + correctedDiff / 2;
+ expectedAwayGoals = avg - correctedDiff / 2;
+ }
+ }
+
+ expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.45, 2.5);
+ expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.45, 2.4);
 
  let bestProbability = 0;
  let bestScore = "0-0";
@@ -174,13 +192,13 @@ exports.handler = async function () {
  finalOver25Tip = "2,5 FELETT";
  }
 
- let finalBttsTip = "NG";
+ let finalBttsTip = "NEM";
  if (
  btts >= Number(settings.btts_threshold || 0.6) &&
  expectedHomeGoals >= Number(settings.min_team_goal_for_btts || 0.95) &&
  expectedAwayGoals >= Number(settings.min_team_goal_for_btts || 0.95)
  ) {
- finalBttsTip = "GG";
+ finalBttsTip = "IGEN";
  }
 
  const strongerSide =
@@ -202,10 +220,10 @@ exports.handler = async function () {
  predicted_cards_total: cards.total,
  final_over25_tip: finalOver25Tip,
  final_btts_tip: finalBttsTip,
- used_home_advantage: Number(settings.home_advantage || 0.08),
+ used_home_advantage: homeAdvantage,
  used_over25_threshold: Number(settings.over25_threshold || 0.6),
  used_btts_threshold: Number(settings.btts_threshold || 0.6),
- explanation: `A modell súlyozott forma, ligaerő és visszamért küszöbök alapján számol. A várható gólok: ${match.home_team_name} ${expectedHomeGoals.toFixed(
+ explanation: `A modell súlyozott forma, ligaerő és stabilizált topcsapat-korrekció alapján számol. A várható gólok: ${match.home_team_name} ${expectedHomeGoals.toFixed(
  2
  )}, ${match.away_team_name} ${expectedAwayGoals.toFixed(
  2
@@ -350,7 +368,7 @@ exports.handler = async function () {
  ? (prediction.final_over25_tip === "2,5 FELETT") === (actualTotal > 2.5)
  : null,
  btts_hit: isFinished
- ? (prediction.final_btts_tip === "GG") === actualBtts
+ ? (prediction.final_btts_tip === "IGEN") === actualBtts
  : null,
 
  updated_at: new Date().toISOString()
@@ -414,7 +432,7 @@ exports.handler = async function () {
 
  exact_hit = existingRow.predicted_score === actualScore;
  over25_hit = (existingRow.final_over25_tip === "2,5 FELETT") === (actualTotal > 2.5);
- btts_hit = (existingRow.final_btts_tip === "GG") === actualBtts;
+ btts_hit = (existingRow.final_btts_tip === "IGEN") === actualBtts;
  }
 
  const { error: updateError } = await supabase

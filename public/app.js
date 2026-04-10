@@ -1,9 +1,10 @@
 const statusEl = document.getElementById("status");
 const listEl = document.getElementById("list");
 const reloadBtn = document.getElementById("reloadBtn");
+const aiStatsEl = document.getElementById("ai-stats");
 
 const CACHE_KEY = "foci_predictions_cache";
-const CACHE_TIME = 5 * 60 * 1000;
+const CACHE_TIME = 60 * 1000;
 const OPEN_LEAGUES_KEY = "foci_open_leagues";
 const OPEN_MATCHES_KEY = "foci_open_matches";
 const OPEN_STATS_KEY = "foci_stats_open";
@@ -36,11 +37,7 @@ function buildGoalMatrix(expectedHomeGoals, expectedAwayGoals) {
  topCell = `${home}-${away}`;
  }
 
- row.push({
- home,
- away,
- percent
- });
+ row.push({ home, away, percent });
  }
  matrix.push(row);
  }
@@ -85,48 +82,47 @@ function renderGoalMatrix(expectedHomeGoals, expectedAwayGoals) {
  html += `
  </tbody>
  </table>
- <div class="matrix-note">A pirossal jelölt cella a legvalószínűbb pontos eredmény.</div>
+ <div class="matrix-note">A piros cella a legvalószínűbb pontos eredmény.</div>
  </div>
  `;
 
  return html;
 }
 
+function formatCompetitionName(code, fallback) {
+ const map = {
+ CL: "Bajnokok Ligája",
+ PL: "Premier League",
+ PD: "La Liga",
+ BL1: "Bundesliga",
+ SA: "Serie A",
+ FL1: "Ligue 1",
+ PPL: "Primeira Liga",
+ DED: "Eredivisie",
+ ELC: "Championship",
+ BSA: "Brazil Serie A"
+ };
+
+ return map[code] || fallback || code;
+}
+
 function groupByLeague(items) {
  const grouped = {};
 
  for (const item of items) {
- const key = `${item.competition_name} (${item.competition_code})`;
- if (!grouped[key]) grouped[key] = [];
- grouped[key].push(item);
+ const key = item.competition_code || item.competition_name;
+ if (!grouped[key]) {
+ grouped[key] = {
+ code: item.competition_code,
+ name: formatCompetitionName(item.competition_code, item.competition_name),
+ emblem: item.competition_emblem || "",
+ items: []
+ };
+ }
+ grouped[key].items.push(item);
  }
 
  return grouped;
-}
-
-function calculateStats(items) {
- let finished = 0;
- let exact = 0;
- let over = 0;
- let btts = 0;
-
- items.forEach((item) => {
- const status = (item.status || "").toUpperCase();
- if (status !== "FINISHED") return;
-
- finished++;
-
- if (item.exact_hit === true) exact++;
- if (item.over25_hit === true) over++;
- if (item.btts_hit === true) btts++;
- });
-
- return {
- finished,
- exact,
- over,
- btts
- };
 }
 
 function getMatchStatusBadge(item) {
@@ -145,67 +141,10 @@ function getMatchStatusBadge(item) {
  `;
  }
 
- if (status === "SCHEDULED" || status === "TIMED") {
  return `<div class="scheduled-badge">KÖZELGŐ</div>`;
- }
-
- return `
- <div class="started-badge">
- <span class="live-dot"></span>
- ELKEZDŐDÖTT
- </div>
- `;
-}
-
-function getFinishedAnalysis(item) {
- const status = (item.status || "").toUpperCase();
- if (status !== "FINISHED") return "";
-
- const home = item.actual_home_goals;
- const away = item.actual_away_goals;
-
- if (home == null || away == null) return "";
-
- const actualScore = `${home}-${away}`;
-
- return `
- <div class="detail-grid">
- <div class="detail-box">
- <span class="label">Valós végeredmény</span>
- <strong>${actualScore}</strong>
- </div>
-
- <div class="detail-box">
- <span class="label">AI pontos eredmény</span>
- <strong>${item.predicted_score || "-"}</strong>
- </div>
-
- <div class="detail-box">
- <span class="label">Pontos eredmény</span>
- <strong>${item.exact_hit ? "IGEN" : "NEM"}</strong>
- </div>
-
- <div class="detail-box">
- <span class="label">Over 2.5 találat</span>
- <strong>${item.over25_hit ? "IGEN" : "NEM"}</strong>
- </div>
-
- <div class="detail-box">
- <span class="label">BTTS találat</span>
- <strong>${item.btts_hit ? "IGEN" : "NEM"}</strong>
- </div>
-
- <div class="detail-box">
- <span class="label">Összgól</span>
- <strong>${home + away}</strong>
- </div>
- </div>
- `;
 }
 
 function createToggleSection(title, innerHtml) {
- if (!innerHtml) return "";
-
  const sectionId = `toggle-${Math.random().toString(36).slice(2, 10)}`;
 
  return `
@@ -243,30 +182,17 @@ function wireToggleButtons(rootEl) {
  });
 }
 
-function loadOpenLeagues() {
+function loadOpenState(key) {
  try {
- const raw = localStorage.getItem(OPEN_LEAGUES_KEY);
+ const raw = localStorage.getItem(key);
  return raw ? JSON.parse(raw) : {};
  } catch {
  return {};
  }
 }
 
-function saveOpenLeagues(state) {
- localStorage.setItem(OPEN_LEAGUES_KEY, JSON.stringify(state));
-}
-
-function loadOpenMatches() {
- try {
- const raw = localStorage.getItem(OPEN_MATCHES_KEY);
- return raw ? JSON.parse(raw) : {};
- } catch {
- return {};
- }
-}
-
-function saveOpenMatches(state) {
- localStorage.setItem(OPEN_MATCHES_KEY, JSON.stringify(state));
+function saveOpenState(key, state) {
+ localStorage.setItem(key, JSON.stringify(state));
 }
 
 function render1X2Row(item) {
@@ -275,25 +201,21 @@ function render1X2Row(item) {
  const away = Number(item.predicted_away_win_probability || 0);
  const max = Math.max(home, draw, away);
 
- const homeActive = home === max ? "active" : "";
- const drawActive = draw === max ? "active" : "";
- const awayActive = away === max ? "active" : "";
-
  return `
  <div class="market-row">
- <div class="market-pill ${homeActive}">
+ <div class="market-pill ${home === max ? "active" : ""}">
  <div class="market-left">
  ${item.home_team_crest ? `<img src="${item.home_team_crest}" class="market-logo" alt="${item.home_team_name}">` : `<span class="market-short">1</span>`}
  </div>
  <div class="market-right">${home.toFixed(0)}%</div>
  </div>
 
- <div class="market-pill draw ${drawActive}">
+ <div class="market-pill draw ${draw === max ? "active" : ""}">
  <div class="market-left">X</div>
  <div class="market-right">${draw.toFixed(0)}%</div>
  </div>
 
- <div class="market-pill ${awayActive}">
+ <div class="market-pill ${away === max ? "active" : ""}">
  <div class="market-left">
  ${item.away_team_crest ? `<img src="${item.away_team_crest}" class="market-logo" alt="${item.away_team_name}">` : `<span class="market-short">2</span>`}
  </div>
@@ -314,74 +236,52 @@ function createMatchCard(item) {
  ? `<div class="time"><b>Végeredmény:</b> ${item.actual_home_goals ?? 0} - ${item.actual_away_goals ?? 0}</div>`
  : `<div class="time">Kezdés: ${new Date(item.match_date).toLocaleString("hu-HU")}</div>`;
 
- const homeGoals = isFinished
- ? (item.actual_home_goals ?? 0)
- : (item.live_home ?? 0);
-
- const awayGoals = isFinished
- ? (item.actual_away_goals ?? 0)
- : (item.live_away ?? 0);
-
+ const homeGoals = isFinished ? (item.actual_home_goals ?? 0) : (item.live_home ?? 0);
+ const awayGoals = isFinished ? (item.actual_away_goals ?? 0) : (item.live_away ?? 0);
  const showScore = isFinished || isLive;
 
  const totalGoals = (
  Number(item.predicted_home_goals || 0) + Number(item.predicted_away_goals || 0)
  ).toFixed(2);
 
- const predictedOver25Text =
- Number(item.predicted_over25_probability || 0) >= 50 ? "2,5 FELETT" : "2,5 ALATT";
+ const bttsText = item.final_btts_tip === "IGEN" ? "Igen" : "Nem";
 
- const predictedBttsText =
- Number(item.predicted_btts_probability || 0) >= 50 ? "Igen" : "Nem";
-
- const aiTipHtml = `
+ const detailHtml = `
  <div class="detail-grid">
  <div class="detail-box">
  <span class="label">Legvalószínűbb eredmény</span>
  <strong>${item.predicted_score || "-"}</strong>
  </div>
-
  <div class="detail-box">
  <span class="label">Hazai győzelem</span>
  <strong>${item.predicted_home_win_probability ?? "-"}%</strong>
  </div>
-
  <div class="detail-box">
  <span class="label">Döntetlen</span>
  <strong>${item.predicted_draw_probability ?? "-"}%</strong>
  </div>
-
  <div class="detail-box">
  <span class="label">Vendég győzelem</span>
  <strong>${item.predicted_away_win_probability ?? "-"}%</strong>
  </div>
-
  <div class="detail-box">
- <span class="label">Over 2.5 (%)</span>
+ <span class="label">Over 2.5 valószínűség</span>
  <strong>${item.predicted_over25_probability ?? "-"}%</strong>
  </div>
-
  <div class="detail-box">
- <span class="label">BTTS (%)</span>
+ <span class="label">Mindkét csapat gól valószínűség</span>
  <strong>${item.predicted_btts_probability ?? "-"}%</strong>
  </div>
-
  <div class="detail-box">
  <span class="label">Szögletek</span>
  <strong>${item.predicted_corners_total ?? "-"}</strong>
  </div>
-
  <div class="detail-box">
  <span class="label">Lapok</span>
  <strong>${item.predicted_cards_total ?? "-"}</strong>
  </div>
  </div>
-
  <div class="explanation">${item.explanation || ""}</div>
-
- ${(item.status || "").toUpperCase() === "FINISHED"
- ? createToggleSection("AI ellenőrzés", getFinishedAnalysis(item))
- : ""}
  `;
 
  const goalMatrixHtml = renderGoalMatrix(
@@ -390,7 +290,7 @@ function createMatchCard(item) {
  );
 
  const matchKey = String(item.match_id);
- const openMatches = loadOpenMatches();
+ const openMatches = loadOpenState(OPEN_MATCHES_KEY);
  const isOpen = !!openMatches[matchKey];
 
  const card = document.createElement("div");
@@ -410,9 +310,7 @@ function createMatchCard(item) {
  ${showScore ? `<span class="team-score">${homeGoals}</span>` : ""}
  </div>
 
- <div class="vs-block">
- <div class="vs">vs</div>
- </div>
+ <div class="vs-block"><div class="vs">vs</div></div>
 
  <div class="team-side away-side">
  ${showScore ? `<span class="team-score">${awayGoals}</span>` : ""}
@@ -435,47 +333,46 @@ function createMatchCard(item) {
 
  <div class="compact-box">
  <span class="label">2,5 gól</span>
- <strong>${predictedOver25Text}</strong>
+ <strong>${item.final_over25_tip}</strong>
  </div>
 
  <div class="compact-box">
  <span class="label">Mindkét csapat gól</span>
- <strong>${predictedBttsText}</strong>
+ <strong>${bttsText}</strong>
  </div>
  </div>
 
- ${createToggleSection("AI részletes tipp", aiTipHtml)}
+ ${createToggleSection("AI részletes tipp", detailHtml)}
  ${createToggleSection("Gólmátrix", goalMatrixHtml)}
  </div>
  `;
 
  const headerBtn = card.querySelector(".match-header");
  const body = card.querySelector(".match-body");
- const arrow = card.querySelector(".arrow");
+ const arrow = card.querySelector(".match-header .arrow");
 
  headerBtn.addEventListener("click", () => {
  const nowOpen = body.classList.toggle("open");
  arrow.classList.toggle("open", nowOpen);
 
- const current = loadOpenMatches();
+ const current = loadOpenState(OPEN_MATCHES_KEY);
  current[matchKey] = nowOpen;
- saveOpenMatches(current);
+ saveOpenState(OPEN_MATCHES_KEY, current);
  });
 
  wireToggleButtons(card);
-
  return card;
 }
 
-function createLeagueBlock(leagueName, items) {
- const openState = loadOpenLeagues();
- const isOpen = !!openState[leagueName];
+function createLeagueBlock(league) {
+ const openState = loadOpenState(OPEN_LEAGUES_KEY);
+ const isOpen = !!openState[league.code];
 
- const liveCount = items.filter((x) =>
+ const liveCount = league.items.filter((x) =>
  ["LIVE", "IN_PLAY", "PAUSED"].includes((x.status || "").toUpperCase())
  ).length;
 
- const finishedCount = items.filter(
+ const finishedCount = league.items.filter(
  (x) => (x.status || "").toUpperCase() === "FINISHED"
  ).length;
 
@@ -485,29 +382,24 @@ function createLeagueBlock(leagueName, items) {
  const header = document.createElement("button");
  header.className = "league-header";
 
- const emblem = items[0]?.competition_emblem || "";
-
  header.innerHTML = `
  <span class="league-title-wrap">
- ${emblem ? `<img src="${emblem}" class="league-logo" alt="${leagueName}">` : ""}
- <span>${leagueName}</span>
+ ${league.emblem ? `<img src="${league.emblem}" class="league-logo" alt="${league.name}">` : ""}
+ <span>${league.name}</span>
  </span>
 
  <span class="league-meta">
  ${liveCount > 0 ? `<span class="league-live-pill">${liveCount} élő</span>` : ""}
- <span class="league-toggle-text">${items.length} meccs • ${finishedCount} lejátszva</span>
+ <span class="league-toggle-text">${league.items.length} meccs • ${finishedCount} lejátszva</span>
  <span class="arrow ${isOpen ? "open" : ""}"></span>
  </span>
  `;
 
  const content = document.createElement("div");
  content.className = "league-content";
+ if (isOpen) content.classList.add("open");
 
- if (isOpen) {
- content.classList.add("open");
- }
-
- for (const item of items) {
+ for (const item of league.items) {
  content.appendChild(createMatchCard(item));
  }
 
@@ -516,13 +408,11 @@ function createLeagueBlock(leagueName, items) {
  const nowOpen = content.classList.contains("open");
 
  const arrow = header.querySelector(".arrow");
- if (arrow) {
- arrow.classList.toggle("open", nowOpen);
- }
+ if (arrow) arrow.classList.toggle("open", nowOpen);
 
- const currentState = loadOpenLeagues();
- currentState[leagueName] = nowOpen;
- saveOpenLeagues(currentState);
+ const currentState = loadOpenState(OPEN_LEAGUES_KEY);
+ currentState[league.code] = nowOpen;
+ saveOpenState(OPEN_LEAGUES_KEY, currentState);
  });
 
  wrapper.appendChild(header);
@@ -531,37 +421,28 @@ function createLeagueBlock(leagueName, items) {
  return wrapper;
 }
 
-function renderData(items) {
- const newList = document.createElement("div");
+function renderOverallStats(overallStats) {
+ const total = overallStats?.total || 0;
+ const exact = overallStats?.exact || 0;
+ const over = overallStats?.over || 0;
+ const btts = overallStats?.btts || 0;
 
- if (!items.length) {
- statusEl.textContent = "Nincs predikció az adatbázisban.";
- listEl.innerHTML = "";
- return;
- }
+ const exactPct = total ? ((exact / total) * 100).toFixed(0) : 0;
+ const overPct = total ? ((over / total) * 100).toFixed(0) : 0;
+ const bttsPct = total ? ((btts / total) * 100).toFixed(0) : 0;
 
- const stats = calculateStats(items);
-
- if (stats.finished > 0) {
  const isOpen = localStorage.getItem(OPEN_STATS_KEY) === "true";
 
- const statBox = document.createElement("section");
- statBox.className = "card top-stat-card top-stat-collapsible";
-
- const overPct = ((stats.over / stats.finished) * 100).toFixed(0);
- const bttsPct = ((stats.btts / stats.finished) * 100).toFixed(0);
- const exactPct = ((stats.exact / stats.finished) * 100).toFixed(0);
-
- statBox.innerHTML = `
+ aiStatsEl.innerHTML = `
+ <section class="card top-stat-card top-stat-collapsible">
  <button class="top-stat-toggle" type="button">
  <div class="top-stat-header">
  <div>
- <div class="top-stat-kicker">Napi összesítő</div>
+ <div class="top-stat-kicker">Összesített AI stat</div>
  <div class="top-stat-title">AI teljesítmény</div>
  </div>
-
  <div class="top-stat-right">
- <div class="top-stat-badge">${stats.finished} meccs</div>
+ <div class="top-stat-badge">${total} meccs</div>
  <span class="arrow ${isOpen ? "open" : ""}"></span>
  </div>
  </div>
@@ -571,43 +452,52 @@ function renderData(items) {
  <div class="top-stat-grid">
  <div class="top-mini-box">
  <span class="label">Pontos eredmény</span>
- <strong>${stats.exact}</strong>
+ <strong>${exact}</strong>
  <small>${exactPct}%</small>
  </div>
-
  <div class="top-mini-box">
- <span class="label">Over 2.5</span>
- <strong>${stats.over}</strong>
+ <span class="label">Over 2.5 találat</span>
+ <strong>${over}</strong>
  <small>${overPct}%</small>
  </div>
-
  <div class="top-mini-box">
- <span class="label">BTTS</span>
- <strong>${stats.btts}</strong>
+ <span class="label">Mindkét csapat gól</span>
+ <strong>${btts}</strong>
  <small>${bttsPct}%</small>
  </div>
  </div>
  </div>
+ </section>
  `;
 
- const toggleBtn = statBox.querySelector(".top-stat-toggle");
- const body = statBox.querySelector(".top-stat-body");
- const arrow = statBox.querySelector(".arrow");
+ const toggleBtn = aiStatsEl.querySelector(".top-stat-toggle");
+ const body = aiStatsEl.querySelector(".top-stat-body");
+ const arrow = aiStatsEl.querySelector(".arrow");
 
  toggleBtn.addEventListener("click", () => {
  const nowOpen = body.classList.toggle("open");
  arrow.classList.toggle("open", nowOpen);
  localStorage.setItem(OPEN_STATS_KEY, String(nowOpen));
  });
+}
 
- newList.appendChild(statBox);
+function renderData(payload) {
+ const items = payload.predictions || [];
+ const grouped = groupByLeague(items);
+ const leagues = Object.values(grouped);
+
+ renderOverallStats(payload.overall_stats || { total: 0, exact: 0, over: 0, btts: 0 });
+
+ const newList = document.createElement("div");
+
+ if (!items.length) {
+ statusEl.textContent = "Nincs mai predikció az adatbázisban.";
+ listEl.innerHTML = "";
+ return;
  }
 
- const grouped = groupByLeague(items);
- const leagues = Object.keys(grouped);
-
- leagues.forEach((leagueName) => {
- const block = createLeagueBlock(leagueName, grouped[leagueName]);
+ leagues.forEach((league) => {
+ const block = createLeagueBlock(league);
  newList.appendChild(block);
  });
 
@@ -616,7 +506,7 @@ function renderData(items) {
 
 async function loadPredictions(forceRefresh = false, silent = false) {
  if (!silent) {
- statusEl.textContent = "Betöltés adatbázisból...";
+ statusEl.textContent = "Betöltés...";
  }
 
  try {
@@ -628,9 +518,7 @@ async function loadPredictions(forceRefresh = false, silent = false) {
 
  if (Date.now() - parsed.time < CACHE_TIME) {
  renderData(parsed.data);
- if (!silent) {
- statusEl.textContent = "Cache-ből betöltve";
- }
+ if (!silent) statusEl.textContent = "Frissítve";
  return parsed.data;
  }
  }
@@ -643,28 +531,26 @@ async function loadPredictions(forceRefresh = false, silent = false) {
  throw new Error(data.error || "Szerverhiba");
  }
 
- const items = data.predictions || [];
-
  localStorage.setItem(
  CACHE_KEY,
  JSON.stringify({
  time: Date.now(),
- data: items
+ data
  })
  );
 
- renderData(items);
+ renderData(data);
 
  if (!silent) {
- statusEl.textContent = `Betöltve DB-ből: ${items.length} predikció`;
+ statusEl.textContent = `Betöltve DB-ből: ${(data.predictions || []).length} mai predikció`;
  }
 
- return items;
+ return data;
  } catch (error) {
  if (!silent) {
  statusEl.textContent = error.message || "Hiba történt.";
  }
- return [];
+ return null;
  }
 }
 

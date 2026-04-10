@@ -39,17 +39,21 @@ exports.handler = async function () {
  const season = getSeasonStartYearUtc();
 
  const LEAGUE_STRENGTH = {
- PL: 1.00,
  CL: 1.00,
+ PL: 1.00,
  PD: 0.97,
  BL1: 0.96,
  SA: 0.95,
  FL1: 0.93,
- PPL: 0.88
+ PPL: 0.88,
+ DED: 0.89,
+ ELC: 0.87,
+ BSA: 0.90,
+ OTHERS: 0.90
  };
 
  function getLeagueStrength(code) {
- return LEAGUE_STRENGTH[code] ?? 0.90;
+ return LEAGUE_STRENGTH[code] ?? LEAGUE_STRENGTH.OTHERS;
  }
 
  async function fetchJson(url) {
@@ -69,12 +73,13 @@ exports.handler = async function () {
 
  const { data: todayMatches, error: matchesError } = await supabase
  .from("matches")
- .select("home_team_id, home_team_name, away_team_id, away_team_name")
+ .select("match_date,status,home_team_id,home_team_name,away_team_id,away_team_name")
  .order("match_date", { ascending: true });
 
  if (matchesError) throw matchesError;
 
  const teamsMap = new Map();
+ const latestFinishedTodayByTeam = new Map();
 
  for (const match of todayMatches || []) {
  teamsMap.set(match.home_team_id, {
@@ -86,6 +91,21 @@ exports.handler = async function () {
  team_id: match.away_team_id,
  team_name: match.away_team_name
  });
+
+ const status = (match.status || "").toUpperCase();
+ if (status === "FINISHED") {
+ const matchDateIso = match.match_date;
+
+ const homeCurrent = latestFinishedTodayByTeam.get(match.home_team_id);
+ if (!homeCurrent || new Date(matchDateIso) > new Date(homeCurrent)) {
+ latestFinishedTodayByTeam.set(match.home_team_id, matchDateIso);
+ }
+
+ const awayCurrent = latestFinishedTodayByTeam.get(match.away_team_id);
+ if (!awayCurrent || new Date(matchDateIso) > new Date(awayCurrent)) {
+ latestFinishedTodayByTeam.set(match.away_team_id, matchDateIso);
+ }
+ }
  }
 
  const teams = Array.from(teamsMap.values());
@@ -99,15 +119,15 @@ exports.handler = async function () {
  if (cacheError) throw cacheError;
 
  const latestSeasonCacheByTeam = new Map();
- const todayCacheTeamIds = new Set();
+ const todayCacheByTeam = new Map();
 
  for (const row of seasonCacheRows || []) {
  if (!latestSeasonCacheByTeam.has(row.team_id)) {
  latestSeasonCacheByTeam.set(row.team_id, row);
  }
 
- if (row.match_day === matchDay) {
- todayCacheTeamIds.add(row.team_id);
+ if (row.match_day === matchDay && !todayCacheByTeam.has(row.team_id)) {
+ todayCacheByTeam.set(row.team_id, row);
  }
  }
 
@@ -116,20 +136,32 @@ exports.handler = async function () {
 
  for (const team of teams) {
  const seasonCache = latestSeasonCacheByTeam.get(team.team_id);
- const alreadyHasToday = todayCacheTeamIds.has(team.team_id);
+ const todayCache = todayCacheByTeam.get(team.team_id);
+ const latestFinishedToday = latestFinishedTodayByTeam.get(team.team_id);
 
- if (alreadyHasToday) continue;
+ const cacheLastFinished = seasonCache?.last_finished_match_date
+ ? new Date(seasonCache.last_finished_match_date)
+ : null;
 
- if (seasonCache) {
+ const hasNewFinishedMatchToday =
+ latestFinishedToday &&
+ (!cacheLastFinished || new Date(latestFinishedToday) > cacheLastFinished);
+
+ if (todayCache && !hasNewFinishedMatchToday) {
+ continue;
+ }
+
+ if (seasonCache && !hasNewFinishedMatchToday) {
  rowsToCopy.push({
  ...seasonCache,
  id: undefined,
  match_day: matchDay,
  updated_at: new Date().toISOString()
  });
- } else {
- teamsToFetch.push(team);
+ continue;
  }
+
+ teamsToFetch.push(team);
  }
 
  if (rowsToCopy.length > 0) {
@@ -271,14 +303,8 @@ exports.handler = async function () {
  home_last_10_count: homeMatches.length,
  away_last_10_count: awayMatches.length,
 
- avg_goals_for: weightedAverage(
- combinedStats.map((x) => x.goalsFor),
- 1.2
- ),
- avg_goals_against: weightedAverage(
- combinedStats.map((x) => x.goalsAgainst),
- 1.2
- ),
+ avg_goals_for: weightedAverage(combinedStats.map((x) => x.goalsFor), 1.2),
+ avg_goals_against: weightedAverage(combinedStats.map((x) => x.goalsAgainst), 1.2),
 
  avg_goals_for_home: weightedAverage(homeStats.map((x) => x.goalsFor), 1.2),
  avg_goals_against_home: weightedAverage(homeStats.map((x) => x.goalsAgainst), 1.1),
@@ -315,7 +341,6 @@ exports.handler = async function () {
  for (const team of batch) {
  const recentMatches = await getRecentFinishedMatches(team.team_id);
  fetchedRows.push(buildTeamFormRow(team, recentMatches));
-
  await new Promise((resolve) => setTimeout(resolve, 1200));
  }
 

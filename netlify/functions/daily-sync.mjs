@@ -33,55 +33,34 @@ export default async () => {
 
  console.log(" daily-sync indul");
 
+ const matches = await callFunction("sync-matches");
+ const teamForm = await callFunction("sync-team-form");
+ const predictions = await callFunction("sync-predictions");
+
+ let training = null;
  const now = new Date();
- const minute = now.getUTCMinutes();
 
- // Ha van élő meccs, mehet sűrűbben a meccsfrissítés
- let hasLive = false;
-
- try {
- const liveCheck = await fetch(`${baseUrl}/.netlify/functions/read-predictions`);
- const liveText = await liveCheck.text();
-
- let liveData;
- try {
- liveData = JSON.parse(liveText);
- } catch {
- liveData = {};
+ if (now.getUTCHours() === 2 && now.getUTCMinutes() === 5) {
+ training = await callFunction("train-model");
  }
 
- hasLive = (liveData.predictions || []).some((p) =>
- ["LIVE", "IN_PLAY", "PAUSED"].includes((p.status || "").toUpperCase())
- );
-
- console.log(" hasLive:", hasLive);
- } catch (err) {
- console.error(" live check fail", err.message);
- }
-
- // sync-matches:
- // - ha van live meccs: minden percben
- // - ha nincs: 3 percenként
- if (hasLive || minute % 3 === 0) {
- await callFunction("sync-matches");
- } else {
- console.log(" sync-matches skip");
- }
-
- // team form mehet mindig, mert már limitált batch-ben dolgozik
- await callFunction("sync-team-form");
-
- // predictions mindig mehet, DB alapú
- await callFunction("sync-predictions");
-
- console.log(" daily-sync kész");
-
- return new Response(JSON.stringify({ ok: true }), {
- status: 200,
- headers: {
- "content-type": "application/json"
- }
+ console.log(" daily-sync kész", {
+ matches,
+ teamForm,
+ predictions,
+ training
  });
+
+ return {
+ statusCode: 200,
+ body: JSON.stringify({
+ ok: true,
+ matches,
+ teamForm,
+ predictions,
+ training
+ })
+ };
 };
 
 export const config = {

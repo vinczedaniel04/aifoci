@@ -6,11 +6,8 @@
 --text: #f8fafc;
 --muted: #9fb0c9;
 --primary: #4f8dfd;
---success: #22c55e;
---danger: #ef4444;
 --accent: #77a7ff;
 --accent-strong: #7b86ff;
---pill-dark: #060b14;
 }
 
 * {
@@ -303,7 +300,6 @@ margin-bottom: 14px;
 
 .finished-badge,
 .live-badge,
-.started-badge,
 .scheduled-badge {
 display: inline-flex;
 align-items: center;
@@ -325,12 +321,6 @@ border: 1px solid #22c55e;
 background: rgba(239, 68, 68, 0.15);
 color: #f87171;
 border: 1px solid #ef4444;
-}
-
-.started-badge {
-background: rgba(245, 158, 11, 0.15);
-color: #fbbf24;
-border: 1px solid #f59e0b;
 }
 
 .scheduled-badge {
@@ -616,7 +606,7 @@ color: #f8fafc;
 }
 
 .top-prob {
-background: var(--danger);
+background: #ef4444;
 color: white;
 font-weight: 800;
 }
@@ -755,13 +745,13 @@ font-size: 13px;
 }
 
 .market-row {
-grid-template-columns: repeat(3,minmax(0, 1fr));
+grid-template-columns: repeat(3, minmax(0, 1fr));
 gap: 10px;
 }
 
 .market-pill {
-min-height: 76px;
-padding: 12px 16px;
+min-height: 72px;
+padding: 10px 12px;
 border-radius: 20px;
 flex-direction: column;
 justify-content: center;
@@ -772,13 +762,13 @@ gap: 6px;
 gap: 6px;
 }
 
-.market-right {
+.market-left {
+min-width: 0;
 font-size: 18px;
 }
 
-.market-left {
+.market-right {
 font-size: 18px;
-min-width: 0px;
 }
 
 .market-logo {
@@ -867,6 +857,34 @@ font-size: 14px;
 
 .team-score {
 font-size: 22px;
+}
+
+.market-row {
+grid-template-columns: repeat(3, minmax(0, 1fr));
+gap: 8px;
+}
+
+.market-pill {
+min-height: 66px;
+padding: 8px 10px;
+border-radius: 18px;
+}
+
+.market-left {
+font-size: 16px;
+}
+
+.market-right {
+font-size: 16px;
+}
+
+.market-logo {
+width: 22px;
+height: 22px;
+}
+
+.market-short {
+font-size: 16px;
 }
 
 .compact-box,

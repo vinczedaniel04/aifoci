@@ -2,20 +2,10 @@ const { createClient } = require("@supabase/supabase-js");
 
 exports.handler = async function () {
  try {
- const supabaseUrl = process.env.SUPABASE_URL;
- const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
- if (!supabaseUrl || !supabaseKey) {
- return {
- statusCode: 500,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- error: "Hiányzó SUPABASE_URL vagy SUPABASE_SERVICE_ROLE_KEY"
- })
- };
- }
-
- const supabase = createClient(supabaseUrl, supabaseKey);
+ const supabase = createClient(
+ process.env.SUPABASE_URL,
+ process.env.SUPABASE_SERVICE_ROLE_KEY
+ );
 
  function clamp(value, min, max) {
  return Math.max(min, Math.min(max, value));
@@ -30,9 +20,7 @@ exports.handler = async function () {
  .maybeSingle();
 
  if (settingsError) throw settingsError;
- if (!settingsRow) {
- throw new Error("Nincs aktív model_settings sor.");
- }
+ if (!settingsRow) throw new Error("Nincs aktív model_settings sor.");
 
  const { data: finishedRows, error: finishedError } = await supabase
  .from("predictions_history")
@@ -50,7 +38,6 @@ exports.handler = async function () {
  if (rows.length < 20) {
  return {
  statusCode: 200,
- headers: { "content-type": "application/json" },
  body: JSON.stringify({
  ok: true,
  message: "Még kevés lezárt meccs van a tanításhoz.",
@@ -71,13 +58,12 @@ exports.handler = async function () {
  (row.actual_home_goals ?? 0) > 0 && (row.actual_away_goals ?? 0) > 0;
 
  const predictedOver = row.final_over25_tip === "2,5 FELETT";
- const predictedBtts = row.final_btts_tip === "GG";
+ const predictedBtts = row.final_btts_tip === "IGEN";
 
  if (predictedOver !== actualOver) wrongOver += 1;
  if (predictedBtts !== actualBtts) wrongBtts += 1;
 
  const homeProb = Number(row.predicted_home_win_probability || 0);
- const awayProb = Number(row.predicted_away_win_probability || 0);
 
  if (homeProb >= 50) {
  homeFavChecks += 1;
@@ -91,17 +77,14 @@ exports.handler = async function () {
  const bttsErrorRate = wrongBtts / rows.length;
  const homeFavFailRate = homeFavChecks > 0 ? tooManyHomeFavs / homeFavChecks : 0;
 
- let newHomeAdvantage = Number(settingsRow.home_advantage || 0.08);
+ let newHomeAdvantage = Number(settingsRow.home_advantage || 0.05);
  let newOverThreshold = Number(settingsRow.over25_threshold || 0.60);
  let newBttsThreshold = Number(settingsRow.btts_threshold || 0.60);
  let newMinTotalGoalsForOver = Number(settingsRow.min_total_goals_for_over || 2.60);
  let newMinTeamGoalForBtts = Number(settingsRow.min_team_goal_for_btts || 0.95);
 
- if (homeFavFailRate > 0.45) {
- newHomeAdvantage -= 0.01;
- } else if (homeFavFailRate < 0.25 && homeFavChecks >= 10) {
- newHomeAdvantage += 0.01;
- }
+ if (homeFavFailRate > 0.45) newHomeAdvantage -= 0.01;
+ else if (homeFavFailRate < 0.25 && homeFavChecks >= 10) newHomeAdvantage += 0.01;
 
  if (overErrorRate > 0.42) {
  newOverThreshold += 0.01;
@@ -141,7 +124,6 @@ exports.handler = async function () {
 
  return {
  statusCode: 200,
- headers: { "content-type": "application/json" },
  body: JSON.stringify({
  ok: true,
  finished_matches: rows.length,
@@ -160,7 +142,6 @@ exports.handler = async function () {
  } catch (error) {
  return {
  statusCode: 500,
- headers: { "content-type": "application/json" },
  body: JSON.stringify({
  error: error.message || "Ismeretlen hiba"
  })

@@ -1,227 +1,141 @@
 const { createClient } = require("@supabase/supabase-js");
 
 exports.handler = async function () {
- try {
- const footballToken = process.env.FOOTBALL_DATA_API_KEY;
- const supabaseUrl = process.env.SUPABASE_URL;
- const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+try {
+const supabase = createClient(
+process.env.SUPABASE_URL,
+process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
- if (!footballToken || !supabaseUrl || !supabaseKey) {
- return {
- statusCode: 500,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- error: "Hiányzó FOOTBALL_DATA_API_KEY, SUPABASE_URL vagy SUPABASE_SERVICE_ROLE_KEY"
- })
- };
- }
+const footballToken = process.env.FOOTBALL_DATA_API_KEY;
 
- const supabase = createClient(supabaseUrl, supabaseKey);
- const API_BASE = "https://api.football-data.org/v4";
+if (!footballToken) {
+throw new Error("Hiányzó FOOTBALL_DATA_API_KEY");
+}
 
- const COMPETITIONS = [
- "PL",
- "PD",
- "BL1",
- "SA",
- "FL1",
- "CL"
- ];
+const API_BASE = "https://api.football-data.org/v4";
 
- function isTodayUtc(dateString) {
- const d = new Date(dateString);
- const now = new Date();
+const COMPETITIONS = [
+"CL",
+"PL",
+"PD",
+"BL1",
+"SA",
+"FL1",
+"PPL",
+"DED",
+"ELC",
+"BSA"
+];
 
- return (
- d.getUTCFullYear() === now.getUTCFullYear() &&
- d.getUTCMonth() === now.getUTCMonth() &&
- d.getUTCDate() === now.getUTCDate()
- );
- }
+function getTodayUtcDate() {
+const now = new Date();
+return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(
+now.getUTCDate()
+).padStart(2, "0")}`;
+}
 
- function normalizeStatus(rawStatus, utcDate) {
- const status = (rawStatus || "").toUpperCase();
- const now = new Date();
- const kickoff = new Date(utcDate);
- const diffMinutes = (now.getTime() - kickoff.getTime()) / 60000;
+function isTodayUtc(utcDate) {
+return utcDate?.slice(0, 10) === getTodayUtcDate();
+}
 
- if (status === "TIMED" && diffMinutes >= 2 && diffMinutes < 180) {
- return "LIVE";
- }
+function normalizeStatus(rawStatus, utcDate) {
+const status = (rawStatus || "").toUpperCase();
+const now = new Date();
+const kickoff = new Date(utcDate);
+const diffMinutes = (now.getTime() - kickoff.getTime()) / 60000;
 
- return status || null;
- }
+if (status === "TIMED" && diffMinutes >= 2 && diffMinutes < 180) {
+return "LIVE";
+}
 
- async function fetchLeague(code) {
- try {
- const res = await fetch(`${API_BASE}/competitions/${code}/matches`, {
- headers: {
- "X-Auth-Token": footballToken
- }
- });
+return status || null;
+}
 
- const text = await res.text();
+async function fetchCompetitionMatches(code) {
+const response = await fetch(`${API_BASE}/competitions/${code}/matches`, {
+headers: {
+"X-Auth-Token": footballToken
+}
+});
 
- if (!res.ok) {
- return {
- code,
- ok: false,
- status: res.status,
- raw: text,
- matches: []
- };
- }
+if (!response.ok) {
+const text = await response.text();
+throw new Error(`${code} fetch hiba: ${response.status} ${text}`);
+}
 
- let data;
- try {
- data = JSON.parse(text);
- } catch {
- return {
- code,
- ok: false,
- status: 500,
- raw: "Nem sikerült JSON-ként értelmezni az API választ",
- matches: []
- };
- }
+const json = await response.json();
+return json.matches || [];
+}
 
- const matches = (data.matches || [])
- .filter((m) => isTodayUtc(m.utcDate))
- .map((m) => ({
- match_id: m.id,
- match_date: m.utcDate,
- competition_code: m.competition?.code || code,
- competition_name: m.competition?.name || code,
- competition_emblem: m.competition?.emblem || null,
- status: normalizeStatus(m.status, m.utcDate),
+let allMatches = [];
 
- home_team_id: m.homeTeam?.id || null,
- home_team_name: m.homeTeam?.name || null,
- home_team_crest: m.homeTeam?.crest || null,
+for (const code of COMPETITIONS) {
+const matches = await fetchCompetitionMatches(code);
+allMatches.push(...matches.filter((m) => isTodayUtc(m.utcDate)));
+await new Promise((resolve) => setTimeout(resolve, 500));
+}
 
- away_team_id: m.awayTeam?.id || null,
- away_team_name: m.awayTeam?.name || null,
- away_team_crest: m.awayTeam?.crest || null,
+allMatches = allMatches.map((m) => ({
+match_id: m.id,
+match_date: m.utcDate,
+competition_code: m.competition?.code || "",
+competition_name: m.competition?.name || "",
+competition_emblem: m.competition?.emblem || null,
+status: normalizeStatus(m.status, m.utcDate),
 
- full_time_home: m.score?.fullTime?.home ?? null,
- full_time_away: m.score?.fullTime?.away ?? null,
+home_team_id: m.homeTeam?.id,
+home_team_name: m.homeTeam?.name || "",
+home_team_crest: m.homeTeam?.crest || null,
 
- live_home:
- m.score?.fullTime?.home ??
- m.score?.halfTime?.home ??
- null,
+away_team_id: m.awayTeam?.id,
+away_team_name: m.awayTeam?.name || "",
+away_team_crest: m.awayTeam?.crest || null,
 
- live_away:
- m.score?.fullTime?.away ??
- m.score?.halfTime?.away ??
- null,
+full_time_home: m.score?.fullTime?.home ?? null,
+full_time_away: m.score?.fullTime?.away ?? null,
 
- minute: null,
- source_updated_at: new Date().toISOString(),
- updated_at: new Date().toISOString()
- }));
+live_home: m.score?.fullTime?.home ?? m.score?.halfTime?.home ?? null,
+live_away: m.score?.fullTime?.away ?? m.score?.halfTime?.away ?? null,
+minute: null,
 
- return {
- code,
- ok: true,
- status: 200,
- count: matches.length,
- matches
- };
- } catch (err) {
- return {
- code,
- ok: false,
- status: 500,
- raw: err.message,
- matches: []
- };
- }
- }
+source_updated_at: new Date().toISOString(),
+updated_at: new Date().toISOString()
+}));
 
- const debug = [];
- const allMatches = [];
+if (allMatches.length === 0) {
+return {
+statusCode: 200,
+body: JSON.stringify({
+ok: true,
+inserted: 0,
+updated: 0,
+match_day: getTodayUtcDate()
+})
+};
+}
 
- for (const code of COMPETITIONS) {
- const leagueResult = await fetchLeague(code);
+const { error } = await supabase
+.from("matches")
+.upsert(allMatches, { onConflict: "match_id" });
 
- debug.push({
- code: leagueResult.code,
- ok: leagueResult.ok,
- status: leagueResult.status,
- count: leagueResult.count || 0,
- raw: leagueResult.ok ? undefined : leagueResult.raw
- });
+if (error) throw error;
 
- if (leagueResult.matches?.length) {
- allMatches.push(...leagueResult.matches);
- }
-
- await new Promise((resolve) => setTimeout(resolve, 1200));
- }
-
- if (allMatches.length === 0) {
- return {
- statusCode: 200,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- ok: false,
- message: "Nem jött be maira szűrt meccs egyik ligából sem.",
- debug
- })
- };
- }
-
- const { error: deleteError } = await supabase
- .from("matches")
- .delete()
- .neq("match_id", 0);
-
- if (deleteError) {
- return {
- statusCode: 500,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- error: "Delete hiba a matches táblán",
- details: deleteError.message,
- debug
- })
- };
- }
-
- const { error: upsertError } = await supabase
- .from("matches")
- .upsert(allMatches, { onConflict: "match_id" });
-
- if (upsertError) {
- return {
- statusCode: 500,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- error: "Upsert hiba a matches táblán",
- details: upsertError.message,
- firstRow: allMatches[0],
- debug
- })
- };
- }
-
- return {
- statusCode: 200,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- ok: true,
- saved: allMatches.length,
- debug
- })
- };
- } catch (error) {
- return {
- statusCode: 500,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- error: error.message || "Ismeretlen hiba"
- })
- };
- }
+return {
+statusCode: 200,
+body: JSON.stringify({
+ok: true,
+inserted: 0,
+updated: allMatches.length,
+match_day: getTodayUtcDate()
+})
+};
+} catch (error) {
+return {
+statusCode: 500,
+body: JSON.stringify({
+error: error.message || "Ismeretlen hiba"
+})
+};
+}
 };
