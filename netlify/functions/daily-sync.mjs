@@ -106,7 +106,7 @@ export default async () => {
  minute % 10 === 0;
 
  // LIVE meccsnél ne minden percben menjen a sync-matches, csak 2 percenként
- const shouldSyncMatchesBecauseLive = hasLive && minute % 2 === 0;
+ const shouldSyncMatchesBecauseLive = hasLive;
 
  // Ha nincs live, de van közelgő meccs, elég ritkábban frissíteni
  const shouldSyncMatchesBecauseUpcoming =
