@@ -44,13 +44,13 @@ max-width: 860px;
 margin: 0 auto 26px auto;
 padding: 2px;
 border-radius: 30px;
-overflow: visible;
 }
 
 .header-glow-line {
 position: absolute;
-inset: -8%;
-border-radius: 32px;
+inset: 0%;
+padding: 2px;
+border-radius: 30px;
 background: conic-gradient(
 from 0deg,
 rgba(0, 240, 255, 0) 0deg,
@@ -61,10 +61,14 @@ rgba(157, 0, 255, 0.78) 250deg,
 rgba(0, 240, 255, 0.95) 320deg,
 rgba(0, 240, 255, 0) 360deg
 );
-filter: blur(10px);
-opacity: 1;
-animation: spinGlow 4.5s linear infinite;
+animation: spinGlow 4s linear infinite;
 z-index: 0;
+
+-webkit-mask:
+linear-gradient(#000 0 0) content-box, 
+linear-gradient(#000 0 0);
+-webkit-mask-composite: xor;
+mask-composite: exclude;
 }
 
 .brand-header {
@@ -121,8 +125,8 @@ opacity: 0.95;
 }
 
 @keyframes spinGlow {
-0% { transform: rotate(0deg) scale(1.02); }
-100% { transform: rotate(360deg) scale(1.02); }
+0% { transform: rotate(0deg); }
+100% { transform: rotate(360deg); }
 }
 
 @keyframes pulseLive {
