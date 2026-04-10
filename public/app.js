@@ -131,14 +131,22 @@ function getMatchStatusBadge(item) {
  return `<div class="finished-badge">LEJÁTSZVA</div>`;
  }
 
- if (status === "LIVE" || status === "IN_PLAY" || status === "PAUSED") {
- return `
- <div class="live-badge">
- <span class="live-dot"></span>
- ÉLŐ
- </div>
- `;
- }
+ if (status === "PAUSED") {
+return `
+<div class="half-badge">
+⏸ Félidő
+</div>
+`;
+}
+
+if (status === "LIVE" || status === "IN_PLAY") {
+return `
+<div class="live-badge">
+<span class="live-dot"></span>
+Élő
+</div>
+`;
+}
 
  return `<div class="scheduled-badge">KÖZELGŐ</div>`;
 }

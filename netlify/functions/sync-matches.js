@@ -1,226 +1,251 @@
 const { createClient } = require("@supabase/supabase-js");
 
 exports.handler = async function () {
-try {
-const supabase = createClient(
-process.env.SUPABASE_URL,
-process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+ try {
+ const supabase = createClient(
+ process.env.SUPABASE_URL,
+ process.env.SUPABASE_SERVICE_ROLE_KEY
+ );
 
-const footballToken = process.env.FOOTBALL_DATA_API_KEY;
+ const footballToken = process.env.FOOTBALL_DATA_API_KEY;
 
-if (!footballToken) {
-throw new Error("Hiányzó FOOTBALL_DATA_API_KEY");
-}
+ if (!footballToken) {
+ throw new Error("Hiányzó FOOTBALL_DATA_API_KEY");
+ }
 
-const API_BASE = "https://api.football-data.org/v4";
+ const API_BASE = "https://api.football-data.org/v4";
 
-const COMPETITIONS = [
-"CL",
-"PL",
-"PD",
-"BL1",
-"SA",
-"FL1",
-"DED",
-];
+ // Csak topligák + BL
+ const DEFAULT_COMPETITIONS = [
+ "CL",
+ "PL",
+ "PD",
+ "BL1",
+ "SA",
+ "FL1"
+ ];
 
-function getTodayUtcDate() {
-const now = new Date();
-return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(
-now.getUTCDate()
-).padStart(2, "0")}`;
-}
+ function getTodayUtcDate() {
+ const now = new Date();
+ return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(
+ now.getUTCDate()
+ ).padStart(2, "0")}`;
+ }
 
-function normalizeStatus(rawStatus, utcDate) {
-const status = (rawStatus || "").toUpperCase();
-const now = new Date();
-const kickoff = new Date(utcDate);
-const diffMinutes = (now.getTime() - kickoff.getTime()) / 60000;
+ function normalizeStatus(rawStatus, utcDate) {
+ const status = (rawStatus || "").toUpperCase();
+ const now = new Date();
+ const kickoff = new Date(utcDate);
+ const diffMinutes = (now.getTime() - kickoff.getTime()) / 60000;
 
-if (status === "TIMED" && diffMinutes >= 2 && diffMinutes < 180) {
-return "LIVE";
-}
+ if (status === "TIMED" && diffMinutes >= 2 && diffMinutes < 180) {
+ return "LIVE";
+ }
 
-return status || null;
-}
+ return status || null;
+ }
 
-function sleep(ms) {
-return new Promise((resolve) => setTimeout(resolve, ms));
-}
+ function sleep(ms) {
+ return new Promise((resolve) => setTimeout(resolve, ms));
+ }
 
-async function fetchCompetitionMatches(code, today) {
-const url = `${API_BASE}/competitions/${code}/matches?dateFrom=${today}&dateTo=${today}`;
+ async function fetchCompetitionMatches(code, today) {
+ const url = `${API_BASE}/competitions/${code}/matches?dateFrom=${today}&dateTo=${today}`;
 
-const response = await fetch(url, {
-headers: {
-"X-Auth-Token": footballToken
-}
-});
+ const response = await fetch(url, {
+ headers: {
+ "X-Auth-Token": footballToken
+ }
+ });
 
-if (response.status === 429) {
-const text = await response.text();
-return {
-ok: false,
-rateLimited: true,
-code,
-error: `${code} rate limited: ${text}`
-};
-}
+ const text = await response.text();
 
-if (!response.ok) {
-const text = await response.text();
-return {
-ok: false,
-rateLimited: false,
-code,
-error: `${code} fetch hiba: ${response.status} ${text}`
-};
-}
+ if (response.status === 429) {
+ return {
+ ok: false,
+ rateLimited: true,
+ code,
+ error: `${code} rate limited: ${text}`
+ };
+ }
 
-const json = await response.json();
-return {
-ok: true,
-code,
-matches: json.matches || []
-};
-}
+ if (!response.ok) {
+ return {
+ ok: false,
+ rateLimited: false,
+ code,
+ error: `${code} fetch hiba: ${response.status} ${text}`
+ };
+ }
 
-const today = getTodayUtcDate();
+ let json;
+ try {
+ json = JSON.parse(text);
+ } catch {
+ json = {};
+ }
 
-const { data: existingTodayMatches, error: existingTodayError } = await supabase
-.from("matches")
-.select("match_id,status,match_date")
-.gte("match_date", `${today}T00:00:00`)
-.lte("match_date", `${today}T23:59:59`);
+ return {
+ ok: true,
+ code,
+ matches: json.matches || []
+ };
+ }
 
-if (existingTodayError) throw existingTodayError;
+ const today = getTodayUtcDate();
+ const startOfDay = `${today}T00:00:00.000Z`;
+ const endOfDay = `${today}T23:59:59.999Z`;
 
-const existingRows = existingTodayMatches || [];
-const hasLiveInDb = existingRows.some((m) =>
-["LIVE", "IN_PLAY", "PAUSED"].includes((m.status || "").toUpperCase())
-);
+ const { data: existingTodayMatches, error: existingTodayError } = await supabase
+ .from("matches")
+ .select("match_id,status,match_date,competition_code")
+ .gte("match_date", startOfDay)
+ .lte("match_date", endOfDay);
 
-const hasAnyTodayInDb = existingRows.length > 0;
+ if (existingTodayError) throw existingTodayError;
 
-let allMatches = [];
-const usedCompetitions = [];
-const skippedCompetitions = [];
-const errors = [];
+ const existingRows = existingTodayMatches || [];
 
-for (const code of COMPETITIONS) {
-const result = await fetchCompetitionMatches(code, today);
+ const hasLiveInDb = existingRows.some((m) =>
+ ["LIVE", "IN_PLAY", "PAUSED"].includes((m.status || "").toUpperCase())
+ );
 
-if (!result.ok) {
-skippedCompetitions.push(code);
-errors.push(result.error);
-await sleep(result.rateLimited ? 2500 : 800);
-continue;
-}
+ const hasAnyTodayInDb = existingRows.length > 0;
 
-if (result.matches.length > 0) {
-usedCompetitions.push(code);
-allMatches.push(...result.matches);
-}
+ // Ha már vannak mai meccsek, csak azokat a ligákat kérdezzük újra,
+ // amik a DB-ben ma tényleg szerepelnek.
+ const dbCompetitionSet = new Set(
+ existingRows
+ .map((row) => row.competition_code)
+ .filter(Boolean)
+ );
 
-await sleep(900);
-}
+ const competitionsToFetch =
+ dbCompetitionSet.size > 0
+ ? Array.from(dbCompetitionSet)
+ : DEFAULT_COMPETITIONS;
 
-const normalizedMatches = allMatches.map((m) => ({
-match_id: m.id,
-match_date: m.utcDate,
-competition_code: m.competition?.code || "",
-competition_name: m.competition?.name || "",
-competition_emblem: m.competition?.emblem || null,
-status: normalizeStatus(m.status, m.utcDate),
+ let allMatches = [];
+ const usedCompetitions = [];
+ const skippedCompetitions = [];
+ const errors = [];
 
-home_team_id: m.homeTeam?.id ?? null,
-home_team_name: m.homeTeam?.name || "",
-home_team_crest: m.homeTeam?.crest || null,
+ for (const code of competitionsToFetch) {
+ const result = await fetchCompetitionMatches(code, today);
 
-away_team_id: m.awayTeam?.id ?? null,
-away_team_name: m.awayTeam?.name || "",
-away_team_crest: m.awayTeam?.crest || null,
+ if (!result.ok) {
+ skippedCompetitions.push(code);
+ errors.push(result.error);
+ await sleep(result.rateLimited ? 2500 : 800);
+ continue;
+ }
 
-full_time_home: m.score?.fullTime?.home ?? null,
-full_time_away: m.score?.fullTime?.away ?? null,
+ if (result.matches.length > 0) {
+ usedCompetitions.push(code);
+ allMatches.push(...result.matches);
+ }
 
-live_home:
-m.score?.fullTime?.home ??
-m.score?.halfTime?.home ??
-null,
-live_away:
-m.score?.fullTime?.away ??
-m.score?.halfTime?.away ??
-null,
+ await sleep(900);
+ }
 
-minute: null,
-source_updated_at: new Date().toISOString(),
-updated_at: new Date().toISOString()
-}));
+ const normalizedMatches = allMatches.map((m) => ({
+ match_id: m.id,
+ match_date: m.utcDate,
+ competition_code: m.competition?.code || "",
+ competition_name: m.competition?.name || "",
+ competition_emblem: m.competition?.emblem || null,
+ status: normalizeStatus(m.status, m.utcDate),
 
-if (normalizedMatches.length === 0) {
-return {
-statusCode: 200,
-headers: { "content-type": "application/json" },
-body: JSON.stringify({
-ok: true,
-inserted: 0,
-updated: 0,
-has_live_in_db: hasLiveInDb,
-had_existing_today_matches: hasAnyTodayInDb,
-used_competitions: usedCompetitions,
-skipped_competitions: skippedCompetitions,
-errors,
-match_day: today
-})
-};
-}
+ home_team_id: m.homeTeam?.id ?? null,
+ home_team_name: m.homeTeam?.name || "",
+ home_team_crest: m.homeTeam?.crest || null,
 
-const existingMap = new Map();
-for (const row of existingRows) {
-existingMap.set(row.match_id, row);
-}
+ away_team_id: m.awayTeam?.id ?? null,
+ away_team_name: m.awayTeam?.name || "",
+ away_team_crest: m.awayTeam?.crest || null,
 
-let inserted = 0;
-let updated = 0;
+ full_time_home: m.score?.fullTime?.home ?? null,
+ full_time_away: m.score?.fullTime?.away ?? null,
 
-for (const match of normalizedMatches) {
-if (existingMap.has(match.match_id)) {
-updated += 1;
-} else {
-inserted += 1;
-}
-}
+ live_home:
+ m.score?.fullTime?.home ??
+ m.score?.halfTime?.home ??
+ null,
 
-const { error: upsertError } = await supabase
-.from("matches")
-.upsert(normalizedMatches, { onConflict: "match_id" });
+ live_away:
+ m.score?.fullTime?.away ??
+ m.score?.halfTime?.away ??
+ null,
 
-if (upsertError) throw upsertError;
+ minute: null,
+ source_updated_at: new Date().toISOString(),
+ updated_at: new Date().toISOString()
+ }));
 
-return {
-statusCode: 200,
-headers: { "content-type": "application/json" },
-body: JSON.stringify({
-ok: true,
-inserted,
-updated,
-has_live_in_db: hasLiveInDb,
-had_existing_today_matches: hasAnyTodayInDb,
-used_competitions: usedCompetitions,
-skipped_competitions: skippedCompetitions,
-errors,
-match_day: today
-})
-};
-} catch (error) {
-return {
-statusCode: 500,
-headers: { "content-type": "application/json" },
-body: JSON.stringify({
-error: error.message || "Ismeretlen hiba"
-})
-};
-}
+ if (normalizedMatches.length === 0) {
+ return {
+ statusCode: 200,
+ headers: { "content-type": "application/json" },
+ body: JSON.stringify({
+ ok: true,
+ inserted: 0,
+ updated: 0,
+ has_live_in_db: hasLiveInDb,
+ had_existing_today_matches: hasAnyTodayInDb,
+ competitions_to_fetch: competitionsToFetch,
+ used_competitions: usedCompetitions,
+ skipped_competitions: skippedCompetitions,
+ errors,
+ match_day: today
+ })
+ };
+ }
+
+ const existingMap = new Map();
+ for (const row of existingRows) {
+ existingMap.set(row.match_id, row);
+ }
+
+ let inserted = 0;
+ let updated = 0;
+
+ for (const match of normalizedMatches) {
+ if (existingMap.has(match.match_id)) {
+ updated += 1;
+ } else {
+ inserted += 1;
+ }
+ }
+
+ const { error: upsertError } = await supabase
+ .from("matches")
+ .upsert(normalizedMatches, { onConflict: "match_id" });
+
+ if (upsertError) throw upsertError;
+
+ return {
+ statusCode: 200,
+ headers: { "content-type": "application/json" },
+ body: JSON.stringify({
+ ok: true,
+ inserted,
+ updated,
+ has_live_in_db: hasLiveInDb,
+ had_existing_today_matches: hasAnyTodayInDb,
+ competitions_to_fetch: competitionsToFetch,
+ used_competitions: usedCompetitions,
+ skipped_competitions: skippedCompetitions,
+ errors,
+ match_day: today
+ })
+ };
+ } catch (error) {
+ return {
+ statusCode: 500,
+ headers: { "content-type": "application/json" },
+ body: JSON.stringify({
+ error: error.message || "Ismeretlen hiba"
+ })
+ };
+ }
 };
