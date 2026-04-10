@@ -195,43 +195,74 @@ function saveOpenState(key, state) {
  localStorage.setItem(key, JSON.stringify(state));
 }
 
-function render1X2Row(item) {
- const home = Number(item.predicted_home_win_probability || 0);
- const draw = Number(item.predicted_draw_probability || 0);
- const away = Number(item.predicted_away_win_probability || 0);
- const max = Math.max(home, draw, away);
+function getMarketToneStyle(value) {
+const percent = Number(value || 0);
 
- return `
- <div class="market-row">
- <div class="market-pill ${home === max ? "active" : ""}">
- <div class="market-left">
- ${
- item.home_team_crest
- ? `<img src="${item.home_team_crest}" class="market-logo" alt="${item.home_team_name}">`
- : `<span class="market-short">1</span>`
- }
- </div>
- <div class="market-right">${home.toFixed(0)}%</div>
- </div>
-
- <div class="market-pill draw ${draw === max ? "active" : ""}">
- <div class="market-left">X</div>
- <div class="market-right">${draw.toFixed(0)}%</div>
- </div>
-
- <div class="market-pill ${away === max ? "active" : ""}">
- <div class="market-left">
- ${
- item.away_team_crest
- ? `<img src="${item.away_team_crest}" class="market-logo" alt="${item.away_team_name}">`
- : `<span class="market-short">2</span>`
- }
- </div>
- <div class="market-right">${away.toFixed(0)}%</div>
- </div>
- </div>
- `;
+if (percent >= 50) {
+return `
+background: linear-gradient(135deg, rgba(34, 197, 94, 0.22) 0%, rgba(59, 130, 246, 0.18) 55%, #050a12 100%);
+border-color: rgba(74, 222, 128, 0.45);
+box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.12);
+`;
 }
+
+if (percent < 30) {
+return `
+background: linear-gradient(135deg, rgba(239, 68, 68, 0.20) 0%, rgba(59, 130, 246, 0.14) 55%, #050a12 100%);
+border-color: rgba(248, 113, 113, 0.35);
+box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.10);
+`;
+}
+
+return `
+background: linear-gradient(135deg, rgba(250, 204, 21, 0.18) 0%, rgba(59, 130, 246, 0.14) 55%, #050a12 100%);
+border-color: rgba(250, 204, 21, 0.30);
+box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.08);
+`;
+}
+
+function render1X2Row(item) {
+const home = Number(item.predicted_home_win_probability || 0);
+const draw = Number(item.predicted_draw_probability || 0);
+const away = Number(item.predicted_away_win_probability || 0);
+const max = Math.max(home, draw, away);
+
+const homeStyle = getMarketToneStyle(home);
+const drawStyle = getMarketToneStyle(draw);
+const awayStyle = getMarketToneStyle(away);
+
+return `
+<div class="market-row">
+<div class="market-pill ${home === max ? "active" : ""}" style="${homeStyle}">
+<div class="market-left">
+${
+item.home_team_crest
+? `<img src="${item.home_team_crest}" class="market-logo" alt="${item.home_team_name}">`
+: `<span class="market-short">1</span>`
+}
+</div>
+<div class="market-right">${home.toFixed(0)}%</div>
+</div>
+
+<div class="market-pill draw ${draw === max ? "active" : ""}" style="${drawStyle}">
+<div class="market-left">X</div>
+<div class="market-right">${draw.toFixed(0)}%</div>
+</div>
+
+<div class="market-pill ${away === max ? "active" : ""}" style="${awayStyle}">
+<div class="market-left">
+${
+item.away_team_crest
+? `<img src="${item.away_team_crest}" class="market-logo" alt="${item.away_team_name}">`
+: `<span class="market-short">2</span>`
+}
+</div>
+<div class="market-right">${away.toFixed(0)}%</div>
+</div>
+</div>
+`;
+}
+
 
 function createMatchCard(item) {
  const statusBadge = getMatchStatusBadge(item);
