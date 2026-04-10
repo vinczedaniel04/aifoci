@@ -1268,7 +1268,7 @@ margin: 0;
 display: flex;
 align-items: center;
 justify-content: space-between;
-gap: 10px;
+width: 100%;
 color: #f8fafc;
 font-size: 22px;
 font-weight: 900;
