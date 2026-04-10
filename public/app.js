@@ -205,7 +205,11 @@ function render1X2Row(item) {
  <div class="market-row">
  <div class="market-pill ${home === max ? "active" : ""}">
  <div class="market-left">
- ${item.home_team_crest ? `<img src="${item.home_team_crest}" class="market-logo" alt="${item.home_team_name}">` : `<span class="market-short">1</span>`}
+ ${
+ item.home_team_crest
+ ? `<img src="${item.home_team_crest}" class="market-logo" alt="${item.home_team_name}">`
+ : `<span class="market-short">1</span>`
+ }
  </div>
  <div class="market-right">${home.toFixed(0)}%</div>
  </div>
@@ -217,7 +221,11 @@ function render1X2Row(item) {
 
  <div class="market-pill ${away === max ? "active" : ""}">
  <div class="market-left">
- ${item.away_team_crest ? `<img src="${item.away_team_crest}" class="market-logo" alt="${item.away_team_name}">` : `<span class="market-short">2</span>`}
+ ${
+ item.away_team_crest
+ ? `<img src="${item.away_team_crest}" class="market-logo" alt="${item.away_team_name}">`
+ : `<span class="market-short">2</span>`
+ }
  </div>
  <div class="market-right">${away.toFixed(0)}%</div>
  </div>
@@ -305,7 +313,11 @@ function createMatchCard(item) {
 
  <div class="teams-row">
  <div class="team-side">
- ${item.home_team_crest ? `<img src="${item.home_team_crest}" class="team-logo" alt="${item.home_team_name}">` : ""}
+ ${
+ item.home_team_crest
+ ? `<img src="${item.home_team_crest}" class="team-logo" alt="${item.home_team_name}">`
+ : ""
+ }
  <span class="team-name">${item.home_team_name}</span>
  ${showScore ? `<span class="team-score">${homeGoals}</span>` : ""}
  </div>
@@ -315,7 +327,11 @@ function createMatchCard(item) {
  <div class="team-side away-side">
  ${showScore ? `<span class="team-score">${awayGoals}</span>` : ""}
  <span class="team-name">${item.away_team_name}</span>
- ${item.away_team_crest ? `<img src="${item.away_team_crest}" class="team-logo" alt="${item.away_team_name}">` : ""}
+ ${
+ item.away_team_crest
+ ? `<img src="${item.away_team_crest}" class="team-logo" alt="${item.away_team_name}">`
+ : ""
+ }
  </div>
  </div>
 
