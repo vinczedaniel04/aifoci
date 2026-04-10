@@ -110,39 +110,50 @@ exports.handler = async function () {
  const homeDefense = regressTowardMean(homeDefenseRaw, 1.10, 0.32) / homeLeagueStrength;
  const awayDefense = regressTowardMean(awayDefenseRaw, 1.10, 0.32) / awayLeagueStrength;
 
- const homeStrengthBoost = (homeWinRate - awayWinRate) * 0.08;
- const leagueBalanceBoost = (homeLeagueStrength - awayLeagueStrength) * 0.10;
- const homeAdvantage = Number(settings.home_advantage || 0.05);
+ const homeStrengthBoost = (homeWinRate - awayWinRate) * 0.045;
+const leagueBalanceBoost = (homeLeagueStrength - awayLeagueStrength) * 0.06;
+const homeAdvantage = Number(settings.home_advantage || 0.05) * 0.7;
 
- let expectedHomeGoals =
+let expectedHomeGoals =
  (homeAttack * Number(settings.home_attack_weight || 0.52)) +
  (awayDefense * Number(settings.away_defense_weight || 0.48)) +
  homeAdvantage +
  homeStrengthBoost +
  leagueBalanceBoost;
 
- let expectedAwayGoals =
+let expectedAwayGoals =
  (awayAttack * Number(settings.away_attack_weight || 0.52)) +
  (homeDefense * Number(settings.home_defense_weight || 0.48)) -
- (homeStrengthBoost * 0.20) -
- (leagueBalanceBoost * 0.30);
+ (homeStrengthBoost * 0.08) -
+ (leagueBalanceBoost * 0.12);
 
- const bothStrong =
+// Ha két erős csapat játszik, ne engedjünk nagy mesterséges eltérést
+const bothStrong =
  homeLeagueStrength >= 0.93 &&
  awayLeagueStrength >= 0.93 &&
- awayAttackRaw >= 1.6 &&
- homeAttackRaw >= 1.6;
+ awayAttackRaw >= 1.45 &&
+ homeAttackRaw >= 1.45;
 
- if (bothStrong) {
+if (bothStrong) {
  const diff = expectedHomeGoals - expectedAwayGoals;
- if (Math.abs(diff) > 0.28) {
- const correctedDiff = diff * 0.55;
+ if (Math.abs(diff) > 0.18) {
+ const correctedDiff = diff * 0.38;
  const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
  expectedHomeGoals = avg + correctedDiff / 2;
  expectedAwayGoals = avg - correctedDiff / 2;
  }
- }
+}
 
+// Ha a két csapat közel van egymáshoz, húzzuk közelebb döntetlenesebb zónába
+const teamGap =
+ Math.abs(homeAttackRaw - awayAttackRaw) +
+ Math.abs(homeDefenseRaw - awayDefenseRaw);
+
+if (teamGap < 0.45) {
+ const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
+ expectedHomeGoals = (expectedHomeGoals * 0.35) + (avg * 0.65);
+ expectedAwayGoals = (expectedAwayGoals * 0.35) + (avg * 0.65);
+}
  expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.45, 2.5);
  expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.45, 2.4);
 
