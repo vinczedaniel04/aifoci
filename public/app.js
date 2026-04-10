@@ -530,7 +530,11 @@ const toggleBtn = aiStatsEl.querySelector(".top-stat-toggle");
 const body = aiStatsEl.querySelector(".top-stat-body");
 const arrow = aiStatsEl.querySelector(".arrow");
 
-
+toggleBtn.addEventListener("click", () => {
+const nowOpen = body.classList.toggle("open");
+arrow.classList.toggle("open", nowOpen);
+localStorage.setItem(OPEN_STATS_KEY, String(nowOpen));
+});
 }
 
 function renderData(payload) {
