@@ -710,7 +710,7 @@ width: 28px;
 height: 28px;
 object-fit: contain;
 }
-.panel{
+.panel:not(.ticket-panel) {
     display: none !important;
 }
 
