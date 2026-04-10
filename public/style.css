@@ -48,28 +48,50 @@ border-radius: 30px;
 .header-glow-line {
 position: absolute;
 inset: 0;
-padding: 2px;
 border-radius: 30px;
 z-index: 0;
-
-background: conic-gradient(
-from 0deg,
-transparent 0deg,
-transparent 355deg,
-rgba(0, 240, 255, 1) 358deg,
-rgba(0, 255, 157, 1) 359deg,
-rgba(0, 240, 255, 1) 360deg
-);
-
-animation: borderRun 3s linear infinite;
-
--webkit-mask:
-linear-gradient(#000 0 0) content-box,
-linear-gradient(#000 0 0);
--webkit-mask-composite: xor;
-mask-composite: exclude;
 }
 
+.header-glow-line::before {
+
+content: "";
+position: absolute;
+width: 140px;
+height: 4px;
+top:-2px;
+left: 50%;
+transform: translateX(-50%);
+border-radius: 999px;
+background: linear-gradient(90deg,#00f0ff,#00ff9d,#9d00ff);
+box-shadow: 0 0 8px rgba(0,240,255,0.9),
+            0 0 16px rgba(0, 255, 157, 0.7),
+            0 0 22px rgba(157, 0, 255,0.55);
+animation: borderRunner 5s linear infinite;
+
+}
+
+@keyframes borderRunner {
+0% {top:-2px;
+    left: 0%;
+    transform:translateX(0);
+}
+25% {top:0%;
+    left: calc(100%-4px);
+    transform:translateX(-50%,0) rotate(90deg);
+}
+50% {top: calc(100%-4px);
+    left: 50%;
+    transform:translateX(-50%) rotate(180deg);
+}
+75% {top: 50%;
+    left: 0;
+    transform:translateX(-50%, -50%) rotate(270deg);
+}
+100% {top:-2px;
+    left: 0%;
+    transform:translateX(0) rotate(360deg);
+}
+}
 .brand-header {
 position: relative;
 z-index: 1;
@@ -83,14 +105,7 @@ inset 0 0 0 1px rgba(255, 255, 255, 0.03),
 0 12px 28px rgba(0, 0, 0, 0.22);
 }
 
-@keyframes borderRun {
-0% {
-transform: rotate(0deg);
-}
-100% {
-transform: rotate(360deg);
-}
-}
+
 
 .logo-title {
 display: flex;
