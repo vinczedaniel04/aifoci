@@ -195,73 +195,72 @@ function saveOpenState(key, state) {
 }
 
 function getMarketToneStyle(value) {
-const percent = Number(value || 0);
+ const percent = Number(value || 0);
 
-if (percent >= 50) {
-return `
-background: linear-gradient(135deg, rgba(34, 197, 94, 0.22) 0%, rgba(59, 130, 246, 0.18) 55%, #050a12 100%);
-border-color: rgba(74, 222, 128, 0.45);
-box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.12);
-`;
-}
+ if (percent >= 50) {
+ return `
+ background: linear-gradient(135deg, rgba(34, 197, 94, 0.22) 0%, rgba(59, 130, 246, 0.18) 55%, #050a12 100%);
+ border-color: rgba(74, 222, 128, 0.45);
+ box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.12);
+ `;
+ }
 
-if (percent < 30) {
-return `
-background: linear-gradient(135deg, rgba(239, 68, 68, 0.20) 0%, rgba(59, 130, 246, 0.14) 55%, #050a12 100%);
-border-color: rgba(248, 113, 113, 0.35);
-box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.10);
-`;
-}
+ if (percent < 30) {
+ return `
+ background: linear-gradient(135deg, rgba(239, 68, 68, 0.20) 0%, rgba(59, 130, 246, 0.14) 55%, #050a12 100%);
+ border-color: rgba(248, 113, 113, 0.35);
+ box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.10);
+ `;
+ }
 
-return `
-background: linear-gradient(135deg, rgba(250, 204, 21, 0.18) 0%, rgba(59, 130, 246, 0.14) 55%, #050a12 100%);
-border-color: rgba(250, 204, 21, 0.30);
-box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.08);
-`;
+ return `
+ background: linear-gradient(135deg, rgba(250, 204, 21, 0.18) 0%, rgba(59, 130, 246, 0.14) 55%, #050a12 100%);
+ border-color: rgba(250, 204, 21, 0.30);
+ box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.08);
+ `;
 }
 
 function render1X2Row(item) {
-const home = Number(item.predicted_home_win_probability || 0);
-const draw = Number(item.predicted_draw_probability || 0);
-const away = Number(item.predicted_away_win_probability || 0);
-const max = Math.max(home, draw, away);
+ const home = Number(item.predicted_home_win_probability || 0);
+ const draw = Number(item.predicted_draw_probability || 0);
+ const away = Number(item.predicted_away_win_probability || 0);
+ const max = Math.max(home, draw, away);
 
-const homeStyle = getMarketToneStyle(home);
-const drawStyle = getMarketToneStyle(draw);
-const awayStyle = getMarketToneStyle(away);
+ const homeStyle = getMarketToneStyle(home);
+ const drawStyle = getMarketToneStyle(draw);
+ const awayStyle = getMarketToneStyle(away);
 
-return `
-<div class="market-row">
-<div class="market-pill ${home === max ? "active" : ""}" style="${homeStyle}">
-<div class="market-left">
-${
-item.home_team_crest
-? `<img src="${item.home_team_crest}" class="market-logo" alt="${item.home_team_name}">`
-: `<span class="market-short">1</span>`
+ return `
+ <div class="market-row">
+ <div class="market-pill ${home === max ? "active" : ""}" style="${homeStyle}">
+ <div class="market-left">
+ ${
+ item.home_team_crest
+ ? `<img src="${item.home_team_crest}" class="market-logo" alt="${item.home_team_name}">`
+ : `<span class="market-short">1</span>`
+ }
+ </div>
+ <div class="market-right">${home.toFixed(0)}%</div>
+ </div>
+
+ <div class="market-pill draw ${draw === max ? "active" : ""}" style="${drawStyle}">
+ <div class="market-left">X</div>
+ <div class="market-right">${draw.toFixed(0)}%</div>
+ </div>
+
+ <div class="market-pill ${away === max ? "active" : ""}" style="${awayStyle}">
+ <div class="market-left">
+ ${
+ item.away_team_crest
+ ? `<img src="${item.away_team_crest}" class="market-logo" alt="${item.away_team_name}">`
+ : `<span class="market-short">2</span>`
+ }
+ </div>
+ <div class="market-right">${away.toFixed(0)}%</div>
+ </div>
+ </div>
+ `;
 }
-</div>
-<div class="market-right">${home.toFixed(0)}%</div>
-</div>
-
-<div class="market-pill draw ${draw === max ? "active" : ""}" style="${drawStyle}">
-<div class="market-left">X</div>
-<div class="market-right">${draw.toFixed(0)}%</div>
-</div>
-
-<div class="market-pill ${away === max ? "active" : ""}" style="${awayStyle}">
-<div class="market-left">
-${
-item.away_team_crest
-? `<img src="${item.away_team_crest}" class="market-logo" alt="${item.away_team_name}">`
-: `<span class="market-short">2</span>`
-}
-</div>
-<div class="market-right">${away.toFixed(0)}%</div>
-</div>
-</div>
-`;
-}
-
 
 function createMatchCard(item) {
  const statusBadge = getMatchStatusBadge(item);
@@ -468,73 +467,144 @@ function createLeagueBlock(league) {
 }
 
 function renderOverallStats(overallStats) {
-const total = overallStats?.total || 0;
-const exact = overallStats?.exact || 0;
-const over = overallStats?.over || 0;
-const btts = overallStats?.btts || 0;
-const winner = overallStats?.winner || 0;
+ const total = overallStats?.total || 0;
+ const exact = overallStats?.exact || 0;
+ const over = overallStats?.over || 0;
+ const btts = overallStats?.btts || 0;
+ const winner = overallStats?.winner || 0;
 
-const exactPct = total ? ((exact / total) * 100).toFixed(0) : 0;
-const overPct = total ? ((over / total) * 100).toFixed(0) : 0;
-const bttsPct = total ? ((btts / total) * 100).toFixed(0) : 0;
-const winnerPct = total ? ((winner / total) * 100).toFixed(0) : 0;
+ const exactPct = total ? ((exact / total) * 100).toFixed(0) : 0;
+ const overPct = total ? ((over / total) * 100).toFixed(0) : 0;
+ const bttsPct = total ? ((btts / total) * 100).toFixed(0) : 0;
+ const winnerPct = total ? ((winner / total) * 100).toFixed(0) : 0;
 
-const isOpen = "true";
+ const isOpen = "true";
 
-aiStatsEl.innerHTML = `
-<section class="card top-stat-card top-stat-collapsible">
-<button class="top-stat-toggle" type="button">
-<div class="top-stat-header">
-<div>
-<div class="top-stat-kicker">Összesített AI stat</div>
-<div class="top-stat-title">AI teljesítmény</div>
-</div>
-<div class="top-stat-right">
-<div class="top-stat-badge">${total} meccs</div>
-<span class="arrow ${isOpen ? "open" : ""}"></span>
-</div>
-</div>
-</button>
+ aiStatsEl.innerHTML = `
+ <section class="card top-stat-card top-stat-collapsible">
+ <button class="top-stat-toggle" type="button">
+ <div class="top-stat-header">
+ <div>
+ <div class="top-stat-kicker">Összesített AI stat</div>
+ <div class="top-stat-title">AI teljesítmény</div>
+ </div>
+ <div class="top-stat-right">
+ <div class="top-stat-badge">${total} meccs</div>
+ <span class="arrow ${isOpen ? "open" : ""}"></span>
+ </div>
+ </div>
+ </button>
 
-<div class="top-stat-body ${isOpen ? "open" : ""}">
-<div class="top-stat-grid">
-<div class="top-mini-box">
-<span class="label">Pontos eredmény</span>
-<strong>${exact}</strong>
-<small>${exactPct}%</small>
-</div>
+ <div class="top-stat-body ${isOpen ? "open" : ""}">
+ <div class="top-stat-grid">
+ <div class="top-mini-box">
+ <span class="label">Pontos eredmény</span>
+ <strong>${exact}</strong>
+ <small>${exactPct}%</small>
+ </div>
 
-<div class="top-mini-box highlight">
-<span class="label">Helyes 1X2 tipp</span>
-<strong>${winner}</strong>
-<small>${winnerPct}%</small>
-</div>
+ <div class="top-mini-box highlight">
+ <span class="label">Helyes 1X2 tipp</span>
+ <strong>${winner}</strong>
+ <small>${winnerPct}%</small>
+ </div>
 
-<div class="top-mini-box">
-<span class="label">Over 2.5 találat</span>
-<strong>${over}</strong>
-<small>${overPct}%</small>
-</div>
+ <div class="top-mini-box">
+ <span class="label">Over 2.5 találat</span>
+ <strong>${over}</strong>
+ <small>${overPct}%</small>
+ </div>
 
-<div class="top-mini-box">
-<span class="label">Mindkét csapat gól</span>
-<strong>${btts}</strong>
-<small>${bttsPct}%</small>
-</div>
-</div>
-</div>
-</section>
-`;
+ <div class="top-mini-box">
+ <span class="label">Mindkét csapat gól</span>
+ <strong>${btts}</strong>
+ <small>${bttsPct}%</small>
+ </div>
+ </div>
+ </div>
+ </section>
+ `;
 
-const toggleBtn = aiStatsEl.querySelector(".top-stat-toggle");
-const body = aiStatsEl.querySelector(".top-stat-body");
-const arrow = aiStatsEl.querySelector(".arrow");
+ const toggleBtn = aiStatsEl.querySelector(".top-stat-toggle");
+ const body = aiStatsEl.querySelector(".top-stat-body");
+ const arrow = aiStatsEl.querySelector(".arrow");
 
-toggleBtn.addEventListener("click", () => {
-const nowOpen = body.classList.toggle("open");
-arrow.classList.toggle("open", nowOpen);
-localStorage.setItem(OPEN_STATS_KEY, String(nowOpen));
-});
+ toggleBtn.addEventListener("click", () => {
+ const nowOpen = body.classList.toggle("open");
+ arrow.classList.toggle("open", nowOpen);
+ localStorage.setItem(OPEN_STATS_KEY, String(nowOpen));
+ });
+}
+
+function renderAiTicket(payload) {
+ const container = document.getElementById("ai-ticket");
+ if (!container) return;
+
+ const matches = payload?.predictions || [];
+ container.innerHTML = "";
+
+ const picks = [];
+
+ matches.forEach((m) => {
+ const homeProb = Number(m.predicted_home_win_probability || 0);
+ const drawProb = Number(m.predicted_draw_probability || 0);
+ const awayProb = Number(m.predicted_away_win_probability || 0);
+ const totalGoals =
+ Number(m.predicted_home_goals || 0) + Number(m.predicted_away_goals || 0);
+ const bttsProb = Number(m.predicted_btts_probability || 0);
+
+ if (homeProb >= 50) {
+ picks.push({
+ label: `${m.home_team_name} győzelem`,
+ strength: homeProb
+ });
+ }
+
+ if (awayProb >= 50) {
+ picks.push({
+ label: `${m.away_team_name} győzelem`,
+ strength: awayProb
+ });
+ }
+
+ if (drawProb >= 38) {
+ picks.push({
+ label: `${m.home_team_name} - ${m.away_team_name}: Döntetlen`,
+ strength: drawProb
+ });
+ }
+
+ if (totalGoals >= 2.7) {
+ picks.push({
+ label: `${m.home_team_name} - ${m.away_team_name}: Over 2.5`,
+ strength: Number(m.predicted_over25_probability || 0)
+ });
+ }
+
+ if (bttsProb >= 55) {
+ picks.push({
+ label: `${m.home_team_name} - ${m.away_team_name}: Mindkét csapat gól`,
+ strength: bttsProb
+ });
+ }
+ });
+
+ picks
+ .sort((a, b) => b.strength - a.strength)
+ .slice(0, 5)
+ .forEach((pick) => {
+ const div = document.createElement("div");
+ div.className = "ticket-pick";
+ div.innerHTML = `
+ <div class="ticket-pick-text">${pick.label}</div>
+ <div class="ticket-pick-strength">${pick.strength.toFixed(0)}%</div>
+ `;
+ container.appendChild(div);
+ });
+
+ if (!picks.length) {
+ container.innerHTML = `<div class="ticket-empty">Ma még nincs elég erős AI tippmix szelvény.</div>`;
+ }
 }
 
 function renderData(payload) {
@@ -542,7 +612,8 @@ function renderData(payload) {
  const grouped = groupByLeague(items);
  const leagues = Object.values(grouped);
 
- renderOverallStats(payload.overall_stats || { total: 0, exact: 0, over: 0, btts: 0 });
+ renderOverallStats(payload.overall_stats || { total: 0, exact: 0, over: 0, btts: 0, winner: 0 });
+ renderAiTicket(payload);
 
  const newList = document.createElement("div");
 
@@ -561,7 +632,7 @@ function renderData(payload) {
 }
 
 async function loadPredictions(forceRefresh = false, silent = false) {
- if (!silent) {
+ if (!silent && statusEl) {
  statusEl.textContent = "Betöltés...";
  }
 
@@ -574,7 +645,7 @@ async function loadPredictions(forceRefresh = false, silent = false) {
 
  if (Date.now() - parsed.time < CACHE_TIME) {
  renderData(parsed.data);
- if (!silent) statusEl.textContent = "Frissítve";
+ if (!silent && statusEl) statusEl.textContent = "Frissítve";
  return parsed.data;
  }
  }
@@ -597,22 +668,34 @@ async function loadPredictions(forceRefresh = false, silent = false) {
 
  renderData(data);
 
- if (!silent) {
+ if (!silent && statusEl) {
  statusEl.textContent = `Betöltve DB-ből: ${(data.predictions || []).length} mai predikció`;
  }
 
  return data;
  } catch (error) {
- if (!silent) {
+ if (!silent && statusEl) {
  statusEl.textContent = error.message || "Hiba történt.";
  }
  return null;
  }
 }
 
-
 window.addEventListener("DOMContentLoaded", async () => {
  await loadPredictions(true, false);
+
+ document.getElementById("ticketToggle")?.addEventListener("click", () => {
+ const el = document.getElementById("ai-ticket");
+ const arrow = document.getElementById("ticketArrow");
+ if (!el) return;
+
+ const nowOpen = el.style.display === "none" || el.style.display === "";
+ el.style.display = nowOpen ? "block" : "none";
+
+ if (arrow) {
+ arrow.textContent = nowOpen ? "▲" : "▼";
+ }
+ });
 
  setInterval(() => {
  loadPredictions(true, true);
