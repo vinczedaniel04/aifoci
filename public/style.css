@@ -1380,3 +1380,145 @@ width: 100%;
 font-size: 13px;
 }
 }
+/* ===== FULL HEADER NEON SHELL ===== */
+
+.header-shell {
+position: relative;
+max-width: 760px;
+margin: 0 auto 26px auto;
+padding: 3px;
+border-radius: 28px;
+overflow: hidden;
+}
+
+.header-glow-line {
+position: absolute;
+inset: -20%;
+background: conic-gradient(
+from 0deg,
+rgba(0, 240, 255, 0.0) 0deg,
+rgba(0, 240, 255, 0.95) 45deg,
+rgba(0, 255, 157, 0.9) 110deg,
+rgba(255, 230, 0, 0.85) 180deg,
+rgba(157, 0, 255, 0.85) 250deg,
+rgba(0, 240, 255, 0.95) 320deg,
+rgba(0, 240, 255, 0.0) 360deg
+);
+filter: blur(18px);
+animation: spinGlow 5.5s linear infinite;
+z-index: 0;
+opacity: 0.95;
+}
+
+.brand-header {
+position: relative;
+z-index: 1;
+text-align: center;
+margin-bottom: 0;
+padding: 26px 18px;
+border-radius: 25px;
+border: 1px solid rgba(146, 177, 230, 0.18);
+background:
+linear-gradient(180deg, rgba(11, 26, 52, 0.96), rgba(6, 17, 35, 0.96));
+box-shadow:
+inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.logo-title {
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 18px;
+margin: 0 0 12px 0;
+}
+
+.brand-title-text {
+font-size: 64px;
+font-weight: 900;
+line-height: 1;
+letter-spacing: 0.3px;
+color: #ffffff;
+text-shadow:
+0 0 12px rgba(255, 255, 255, 0.08),
+0 0 24px rgba(59, 130, 246, 0.12);
+}
+
+.logo-icon {
+width: 64px;
+height: 64px;
+object-fit: contain;
+border-radius: 18px;
+padding: 7px;
+background: rgba(255, 255, 255, 0.04);
+border: 1px solid rgba(59, 130, 246, 0.28);
+box-shadow:
+inset 0 0 10px rgba(59, 130, 246, 0.10),
+0 0 16px rgba(59, 130, 246, 0.22);
+}
+
+.brand-header p {
+margin: 0;
+color: #d6e4ff;
+font-size: 20px;
+font-weight: 600;
+opacity: 0.95;
+}
+
+@keyframes spinGlow {
+0% {
+transform: rotate(0deg) scale(1.02);
+}
+100% {
+transform: rotate(360deg) scale(1.02);
+}
+}
+
+@media (max-width: 768px) {
+.header-shell {
+max-width: 100%;
+border-radius: 22px;
+margin-bottom: 20px;
+}
+
+.brand-header {
+padding: 22px 14px;
+border-radius: 20px;
+}
+
+.logo-title {
+gap: 12px;
+margin-bottom: 10px;
+}
+
+.brand-title-text {
+font-size: 44px;
+}
+
+.logo-icon {
+width: 48px;
+height: 48px;
+border-radius: 14px;
+padding: 5px;
+}
+
+.brand-header p {
+font-size: 16px;
+}
+}
+
+@media (max-width: 480px) {
+.brand-title-text {
+font-size: 34px;
+}
+
+.logo-icon {
+width: 40px;
+height: 40px;
+}
+
+.brand-header p {
+font-size: 14px;
+}
+}
+
