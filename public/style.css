@@ -710,6 +710,9 @@ width: 28px;
 height: 28px;
 object-fit: contain;
 }
+.panel{
+    display: none !important;
+}
 
 @media (max-width: 800px) {
 .container {
@@ -871,6 +874,9 @@ width: 28px;
 height: 28px;
 object-fit: contain;
 }
+.panel{
+    display: none !important;
+}
 }
 
 @media (max-width: 520px) {
@@ -1024,6 +1030,9 @@ width: 28px;
 height: 28px;
 object-fit: contain;
 }
+.panel{
+    display: none !important;
+}
 }
 @media (max-width: 768px) {
 .top-stat-grid {
@@ -1119,6 +1128,9 @@ width: 28px;
 height: 28px;
 object-fit: contain;
 }
+.panel{
+    display: none !important;
+}
 }
 
 @media (max-width: 480px) {
@@ -1168,5 +1180,8 @@ gap: 10px;
 width: 28px;
 height: 28px;
 object-fit: contain;
+}
+.panel{
+    display: none !important;
 }
 }

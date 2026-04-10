@@ -479,7 +479,7 @@ const overPct = total ? ((over / total) * 100).toFixed(0) : 0;
 const bttsPct = total ? ((btts / total) * 100).toFixed(0) : 0;
 const winnerPct = total ? ((winner / total) * 100).toFixed(0) : 0;
 
-const isOpen = localStorage.getItem(OPEN_STATS_KEY) === "true";
+const isOpen = "true";
 
 aiStatsEl.innerHTML = `
 <section class="card top-stat-card top-stat-collapsible">
