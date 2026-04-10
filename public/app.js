@@ -474,7 +474,7 @@ aiStatsEl.innerHTML = `
 <small>${exactPct}%</small>
 </div>
 
-<div class="top-mini-box">
+<div class="top-mini-box highlight">
 <span class="label">Helyes 1X2 tipp</span>
 <strong>${winner}</strong>
 <small>${winnerPct}%</small>
