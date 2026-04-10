@@ -992,3 +992,126 @@ background: linear-gradient(145deg, #0b2a5c, #0a1f44);
 box-shadow: 0 0 10px rgba(79, 141, 253, 0.3);
 }
 }
+@media (max-width: 768px) {
+.top-stat-grid {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+gap: 12px;
+}
+
+.top-mini-box {
+min-width: 0;
+padding: 16px 12px;
+border-radius: 18px;
+}
+
+.top-mini-box strong {
+font-size: 34px;
+}
+
+.top-mini-box .label {
+font-size: 11px;
+line-height: 1.3;
+}
+
+.teams-row {
+display: grid;
+grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+align-items: center;
+gap: 8px;
+}
+
+.team-side {
+min-width: 0;
+gap: 8px;
+}
+
+.away-side {
+min-width: 0;
+}
+
+.team-name {
+font-size: 14px;
+line-height: 1.2;
+word-break: normal;
+overflow-wrap: anywhere;
+}
+
+.team-logo {
+width: 22px;
+height: 22px;
+}
+
+.vs-block {
+min-width: 28px;
+}
+
+.vs {
+font-size: 14px;
+}
+
+.market-row {
+grid-template-columns: repeat(3, minmax(0, 1fr));
+gap: 8px;
+}
+
+.market-pill {
+min-width: 0;
+min-height: 74px;
+padding: 10px 8px;
+border-radius: 18px;
+}
+
+.market-left,
+.market-right {
+font-size: 16px;
+}
+
+.market-logo {
+width: 24px;
+height: 24px;
+}
+
+.compact-grid {
+grid-template-columns: 1fr;
+gap: 10px;
+}
+}
+
+@media (max-width: 480px) {
+.top-stat-grid {
+grid-template-columns: 1fr 1fr;
+gap: 10px;
+}
+
+.top-mini-box {
+padding: 14px 10px;
+}
+
+.top-mini-box strong {
+font-size: 30px;
+}
+
+.team-name {
+font-size: 13px;
+}
+
+.team-score {
+font-size: 22px;
+min-width: 18px;
+}
+
+.market-pill {
+min-height: 68px;
+padding: 8px 6px;
+}
+
+.market-left,
+.market-right {
+font-size: 15px;
+}
+
+.market-logo {
+width: 22px;
+height: 22px;
+}
+}
