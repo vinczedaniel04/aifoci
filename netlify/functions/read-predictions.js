@@ -40,11 +40,15 @@ const overallStats = {
 total: finished.length,
 exact: finished.filter((m) => m.exact_hit).length,
 over: finished.filter((m) => m.over25_hit).length,
-btts: finished.filter((m) => m.btts_hit).length
+btts: finished.filter((m) => m.btts_hit).length,
+winner: finished.filter((m) => m.winner_hit).length
 };
 
 return {
 statusCode: 200,
+headers: {
+"content-type": "application/json"
+},
 body: JSON.stringify({
 ok: true,
 match_day: today,
@@ -55,6 +59,9 @@ overall_stats: overallStats
 } catch (err) {
 return {
 statusCode: 500,
+headers: {
+"content-type": "application/json"
+},
 body: JSON.stringify({
 error: err.message
 })
