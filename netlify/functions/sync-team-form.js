@@ -74,12 +74,13 @@ exports.handler = async function () {
  const { data: todayMatches, error: matchesError } = await supabase
  .from("matches")
  .select("match_date,status,home_team_id,home_team_name,away_team_id,away_team_name")
+ .gte("match_date", `${matchDay}T00:00:00`)
+ .lte("match_date", `${matchDay}T23:59:59`)
  .order("match_date", { ascending: true });
 
  if (matchesError) throw matchesError;
 
  const teamsMap = new Map();
- const latestFinishedTodayByTeam = new Map();
 
  for (const match of todayMatches || []) {
  teamsMap.set(match.home_team_id, {
@@ -91,24 +92,26 @@ exports.handler = async function () {
  team_id: match.away_team_id,
  team_name: match.away_team_name
  });
-
- const status = (match.status || "").toUpperCase();
- if (status === "FINISHED") {
- const matchDateIso = match.match_date;
-
- const homeCurrent = latestFinishedTodayByTeam.get(match.home_team_id);
- if (!homeCurrent || new Date(matchDateIso) > new Date(homeCurrent)) {
- latestFinishedTodayByTeam.set(match.home_team_id, matchDateIso);
- }
-
- const awayCurrent = latestFinishedTodayByTeam.get(match.away_team_id);
- if (!awayCurrent || new Date(matchDateIso) > new Date(awayCurrent)) {
- latestFinishedTodayByTeam.set(match.away_team_id, matchDateIso);
- }
- }
  }
 
  const teams = Array.from(teamsMap.values());
+
+ if (teams.length === 0) {
+ return {
+ statusCode: 200,
+ headers: {
+ "content-type": "application/json"
+ },
+ body: JSON.stringify({
+ ok: true,
+ copied_from_cache: 0,
+ fetched_new: 0,
+ remaining_new_teams: 0,
+ season,
+ match_day: matchDay
+ })
+ };
+ }
 
  const { data: seasonCacheRows, error: cacheError } = await supabase
  .from("team_form_cache")
@@ -135,53 +138,40 @@ exports.handler = async function () {
  const teamsToFetch = [];
 
  for (const team of teams) {
- const seasonCache = latestSeasonCacheByTeam.get(team.team_id);
  const todayCache = todayCacheByTeam.get(team.team_id);
- const latestFinishedToday = latestFinishedTodayByTeam.get(team.team_id);
+ const latestCache = latestSeasonCacheByTeam.get(team.team_id);
 
- const cacheLastFinished = seasonCache?.last_finished_match_date
- ? new Date(seasonCache.last_finished_match_date)
- : null;
-
- const hasNewFinishedMatchToday =
- latestFinishedToday &&
- (!cacheLastFinished || new Date(latestFinishedToday) > cacheLastFinished);
-
- if (todayCache && !hasNewFinishedMatchToday) {
+ if (todayCache) {
  continue;
  }
 
- if (seasonCache && !hasNewFinishedMatchToday) {
+ if (latestCache) {
+ const { id, ...copyRow } = latestCache;
  rowsToCopy.push({
- ...seasonCache,
- id: undefined,
+ ...copyRow,
  match_day: matchDay,
+ season,
  updated_at: new Date().toISOString()
  });
- continue;
- }
-
+ } else {
  teamsToFetch.push(team);
+ }
  }
 
  if (rowsToCopy.length > 0) {
- const cleanedRowsToCopy = rowsToCopy.map((row) => {
- const { id, ...rest } = row;
- return rest;
- });
-
  const { error: copyError } = await supabase
  .from("team_form_cache")
- .upsert(cleanedRowsToCopy, { onConflict: "match_day,team_id" });
+ .upsert(rowsToCopy, { onConflict: "match_day,team_id" });
 
  if (copyError) throw copyError;
  }
 
- const batch = teamsToFetch.slice(0, 3);
+ // Free tier miatt egyszerre csak keveset kérünk le
+ const batch = teamsToFetch.slice(0, 2);
 
  async function getRecentFinishedMatches(teamId) {
  const data = await fetchJson(
- `${API_BASE}/teams/${teamId}/matches?status=FINISHED&limit=80`
+ `${API_BASE}/teams/${teamId}/matches?status=FINISHED&limit=40`
  );
  return data.matches || [];
  }
@@ -223,13 +213,13 @@ exports.handler = async function () {
 
  const homeMatches = sortedMatches
  .filter((m) => m.homeTeam?.id === team.team_id)
- .slice(0, 15);
+ .slice(0, 10);
 
  const awayMatches = sortedMatches
  .filter((m) => m.awayTeam?.id === team.team_id)
- .slice(0, 15);
+ .slice(0, 10);
 
- const recentAllMatches = sortedMatches.slice(0, 10);
+ const recentAllMatches = sortedMatches.slice(0, 5);
 
  function mapStats(matchList, isHome) {
  return matchList.map((m) => {
@@ -312,9 +302,9 @@ exports.handler = async function () {
  avg_goals_for_away: weightedAverage(awayStats.map((x) => x.goalsFor), 1.0),
  avg_goals_against_away: weightedAverage(awayStats.map((x) => x.goalsAgainst), 1.1),
 
- wins_last_5: recentAllStats.slice(0, 5).filter((x) => x.win).length,
- draws_last_5: recentAllStats.slice(0, 5).filter((x) => x.draw).length,
- losses_last_5: recentAllStats.slice(0, 5).filter((x) => x.loss).length,
+ wins_last_5: recentAllStats.filter((x) => x.win).length,
+ draws_last_5: recentAllStats.filter((x) => x.draw).length,
+ losses_last_5: recentAllStats.filter((x) => x.loss).length,
 
  home_win_rate: weightedRate(homeStats.map((x) => x.win), 0),
  home_draw_rate: weightedRate(homeStats.map((x) => x.draw), 0),
@@ -341,7 +331,7 @@ exports.handler = async function () {
  for (const team of batch) {
  const recentMatches = await getRecentFinishedMatches(team.team_id);
  fetchedRows.push(buildTeamFormRow(team, recentMatches));
- await new Promise((resolve) => setTimeout(resolve, 1200));
+ await new Promise((resolve) => setTimeout(resolve, 1800));
  }
 
  if (fetchedRows.length > 0) {
@@ -362,6 +352,7 @@ exports.handler = async function () {
  copied_from_cache: rowsToCopy.length,
  fetched_new: fetchedRows.length,
  remaining_new_teams: Math.max(teamsToFetch.length - batch.length, 0),
+ total_today_teams: teams.length,
  season,
  match_day: matchDay
  })
