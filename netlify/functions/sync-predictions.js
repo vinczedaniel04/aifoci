@@ -201,6 +201,13 @@ exports.handler = async function () {
  finalBttsTip = "IGEN";
  }
 
+ let predicted1x2Pick = "DRAW";
+ if (homeWin > draw && homeWin > awayWin) {
+ predicted1x2Pick = "HOME";
+ } else if (awayWin > homeWin && awayWin > draw) {
+ predicted1x2Pick = "AWAY";
+ }
+
  const strongerSide =
  expectedHomeGoals >= expectedAwayGoals
  ? match.home_team_name
@@ -216,6 +223,7 @@ exports.handler = async function () {
  predicted_home_win_probability: Number((homeWin * 100).toFixed(2)),
  predicted_draw_probability: Number((draw * 100).toFixed(2)),
  predicted_away_win_probability: Number((awayWin * 100).toFixed(2)),
+ predicted_1x2_pick: predicted1x2Pick,
  predicted_corners_total: corners.total,
  predicted_cards_total: cards.total,
  final_over25_tip: finalOver25Tip,
@@ -229,6 +237,17 @@ exports.handler = async function () {
  2
  )}. Enyhe fölényben van: ${strongerSide}.`
  };
+ }
+
+ function getActual1x2Result(match) {
+ const homeGoals = match.full_time_home;
+ const awayGoals = match.full_time_away;
+
+ if (homeGoals == null || awayGoals == null) return null;
+
+ if (homeGoals > awayGoals) return "HOME";
+ if (awayGoals > homeGoals) return "AWAY";
+ return "DRAW";
  }
 
  const { data: matches, error: matchesError } = await supabase
@@ -290,13 +309,16 @@ exports.handler = async function () {
  ? `${match.full_time_home ?? 0}-${match.full_time_away ?? 0}`
  : null;
 
+ const actual1x2 = isFinished ? getActual1x2Result(match) : null;
+
  const prediction = predictMatch(match, homeForm, awayForm, settingsRow);
 
  if (existingPrediction && isLockedStatus) {
  const missing1X2 =
  existingPrediction.predicted_home_win_probability == null ||
  existingPrediction.predicted_draw_probability == null ||
- existingPrediction.predicted_away_win_probability == null;
+ existingPrediction.predicted_away_win_probability == null ||
+ existingPrediction.predicted_1x2_pick == null;
 
  if (missing1X2) {
  rowsToPatch1X2.push({
@@ -304,6 +326,7 @@ exports.handler = async function () {
  predicted_home_win_probability: prediction.predicted_home_win_probability,
  predicted_draw_probability: prediction.predicted_draw_probability,
  predicted_away_win_probability: prediction.predicted_away_win_probability,
+ predicted_1x2_pick: prediction.predicted_1x2_pick,
  final_over25_tip: prediction.final_over25_tip,
  final_btts_tip: prediction.final_btts_tip,
  used_home_advantage: prediction.used_home_advantage,
@@ -321,6 +344,10 @@ exports.handler = async function () {
  minute: match.minute ?? null,
  actual_home_goals: isFinished ? match.full_time_home : null,
  actual_away_goals: isFinished ? match.full_time_away : null,
+ winner_hit:
+ isFinished && existingPrediction.predicted_1x2_pick
+ ? existingPrediction.predicted_1x2_pick === actual1x2
+ : null,
  updated_at: new Date().toISOString()
  });
 
@@ -352,6 +379,7 @@ exports.handler = async function () {
  predicted_home_win_probability: prediction.predicted_home_win_probability,
  predicted_draw_probability: prediction.predicted_draw_probability,
  predicted_away_win_probability: prediction.predicted_away_win_probability,
+ predicted_1x2_pick: prediction.predicted_1x2_pick,
  predicted_corners_total: prediction.predicted_corners_total,
  predicted_cards_total: prediction.predicted_cards_total,
  final_over25_tip: prediction.final_over25_tip,
@@ -370,6 +398,7 @@ exports.handler = async function () {
  btts_hit: isFinished
  ? (prediction.final_btts_tip === "IGEN") === actualBtts
  : null,
+ winner_hit: isFinished ? prediction.predicted_1x2_pick === actual1x2 : null,
 
  updated_at: new Date().toISOString()
  };
@@ -396,6 +425,7 @@ exports.handler = async function () {
  predicted_home_win_probability: row.predicted_home_win_probability,
  predicted_draw_probability: row.predicted_draw_probability,
  predicted_away_win_probability: row.predicted_away_win_probability,
+ predicted_1x2_pick: row.predicted_1x2_pick,
  final_over25_tip: row.final_over25_tip,
  final_btts_tip: row.final_btts_tip,
  used_home_advantage: row.used_home_advantage,
@@ -411,7 +441,7 @@ exports.handler = async function () {
  for (const row of rowsToUpdateLocked) {
  const { data: existingRow, error: existingRowError } = await supabase
  .from("predictions_history")
- .select("predicted_score, final_over25_tip, final_btts_tip")
+ .select("predicted_score, final_over25_tip, final_btts_tip, predicted_1x2_pick")
  .eq("match_id", row.match_id)
  .maybeSingle();
 
@@ -423,6 +453,7 @@ exports.handler = async function () {
  let exact_hit = null;
  let over25_hit = null;
  let btts_hit = null;
+ let winner_hit = null;
 
  if (isFinished) {
  const actualScore = `${row.actual_home_goals ?? 0}-${row.actual_away_goals ?? 0}`;
@@ -430,9 +461,20 @@ exports.handler = async function () {
  const actualBtts =
  (row.actual_home_goals ?? 0) > 0 && (row.actual_away_goals ?? 0) > 0;
 
+ let actual1x2 = "DRAW";
+ if ((row.actual_home_goals ?? 0) > (row.actual_away_goals ?? 0)) {
+ actual1x2 = "HOME";
+ } else if ((row.actual_home_goals ?? 0) < (row.actual_away_goals ?? 0)) {
+ actual1x2 = "AWAY";
+ }
+
  exact_hit = existingRow.predicted_score === actualScore;
  over25_hit = (existingRow.final_over25_tip === "2,5 FELETT") === (actualTotal > 2.5);
  btts_hit = (existingRow.final_btts_tip === "IGEN") === actualBtts;
+ winner_hit =
+ existingRow.predicted_1x2_pick != null
+ ? existingRow.predicted_1x2_pick === actual1x2
+ : null;
  }
 
  const { error: updateError } = await supabase
@@ -447,6 +489,7 @@ exports.handler = async function () {
  exact_hit,
  over25_hit,
  btts_hit,
+ winner_hit,
  updated_at: row.updated_at
  })
  .eq("match_id", row.match_id);
@@ -481,6 +524,7 @@ exports.handler = async function () {
  predicted_home_win_probability: row.predicted_home_win_probability,
  predicted_draw_probability: row.predicted_draw_probability,
  predicted_away_win_probability: row.predicted_away_win_probability,
+ predicted_1x2_pick: row.predicted_1x2_pick,
  predicted_corners_total: row.predicted_corners_total,
  predicted_cards_total: row.predicted_cards_total,
  final_over25_tip: row.final_over25_tip,
@@ -495,6 +539,7 @@ exports.handler = async function () {
  exact_hit: row.exact_hit,
  over25_hit: row.over25_hit,
  btts_hit: row.btts_hit,
+ winner_hit: row.winner_hit,
  updated_at: row.updated_at
  })
  .eq("match_id", row.match_id);
