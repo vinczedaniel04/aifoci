@@ -84,11 +84,17 @@ export default async () => {
  }
 
  const rows = todayMatches || [];
+
  const hasLive = rows.some((x) =>
  ["LIVE", "IN_PLAY", "PAUSED"].includes((x.status || "").toUpperCase())
  );
+
  const hasUpcoming = rows.some((x) =>
  ["TIMED", "SCHEDULED"].includes((x.status || "").toUpperCase())
+ );
+
+ const hasFinished = rows.some((x) =>
+ ["FINISHED"].includes((x.status || "").toUpperCase())
  );
 
  const isBeforeMidnightWindow = hour === 23 && minute >= 45;
@@ -99,10 +105,23 @@ export default async () => {
  (isBeforeMidnightWindow || isAfterMidnightWindow || isMorningWindow) &&
  minute % 10 === 0;
 
+ // LIVE meccsnél ne minden percben menjen a sync-matches, csak 2 percenként
+ const shouldSyncMatchesBecauseLive = hasLive && minute % 2 === 0;
+
+ // Ha nincs live, de van közelgő meccs, elég ritkábban frissíteni
+ const shouldSyncMatchesBecauseUpcoming =
+ !hasLive && hasUpcoming && minute % 10 === 0;
+
+ // Ha már vannak mai meccsek és mind lementek, ritkán vagy egyáltalán ne zaklassuk
+ const shouldSyncMatchesBecauseFinishedOnly =
+ !hasLive && !hasUpcoming && hasFinished && false;
+
  const shouldSyncMatches =
- hasLive ||
+ shouldSyncMatchesBecauseLive ||
+ shouldSyncMatchesBecauseUpcoming ||
  shouldRefreshListWindow ||
- rows.length === 0;
+ rows.length === 0 ||
+ shouldSyncMatchesBecauseFinishedOnly;
 
  const shouldSyncTeamForm =
  !hasLive &&
@@ -120,8 +139,12 @@ export default async () => {
  budapestMinute: minute,
  hasLive,
  hasUpcoming,
+ hasFinished,
  todayCount: rows.length,
  shouldSyncMatches,
+ shouldSyncMatchesBecauseLive,
+ shouldSyncMatchesBecauseUpcoming,
+ shouldRefreshListWindow,
  shouldSyncTeamForm,
  shouldSyncPredictions
  });

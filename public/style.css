@@ -73,7 +73,8 @@ header {
   padding: 28px 18px;
   border-radius: 28px;
   border: 1px solid rgba(146, 177, 230, 0.2);
-  background: linear-gradient(180deg, rgba(12, 28, 56, 0.96), rgba(6, 17, 35, 0.96));
+  /* ITT A JAVÍTÁS: Teljesen fedő sötétkék háttér, átlátszóság nélkül */
+  background: linear-gradient(180deg, #0c1c38, #061123);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.03),
     0 12px 28px rgba(0, 0, 0, 0.22);
