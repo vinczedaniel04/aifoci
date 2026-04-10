@@ -143,6 +143,7 @@ export default async () => {
  predictions = await callFunction("sync-predictions");
  }
 
+ // napi egyszer automata tanulás, budapesti idő szerint 04:05-kor
  if (hour === 4 && minute === 5) {
  training = await callFunction("train-model");
  }
