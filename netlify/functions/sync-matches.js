@@ -22,10 +22,7 @@ const COMPETITIONS = [
 "BL1",
 "SA",
 "FL1",
-"PPL",
 "DED",
-"ELC",
-"BSA"
 ];
 
 function getTodayUtcDate() {

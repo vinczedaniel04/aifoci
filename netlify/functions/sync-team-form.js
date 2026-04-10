@@ -45,10 +45,7 @@ exports.handler = async function () {
  BL1: 0.96,
  SA: 0.95,
  FL1: 0.93,
- PPL: 0.88,
  DED: 0.89,
- ELC: 0.87,
- BSA: 0.90,
  OTHERS: 0.90
  };
 
