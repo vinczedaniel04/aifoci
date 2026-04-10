@@ -1185,3 +1185,70 @@ object-fit: contain;
     display: none !important;
 }
 }
+/* ===== LOGO TITLE ===== */
+.logo-title {
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 12px;
+}
+
+/* ===== LOGO ICON BASE ===== */
+.logo-icon {
+width: 42px;
+height: 42px;
+object-fit: contain;
+
+border-radius: 12px;
+padding: 4px;
+
+background: rgba(255,255,255,0.05);
+border: 1px solid rgba(59,130,246,0.4);
+
+box-shadow:
+0 0 6px rgba(59,130,246,0.5),
+0 0 12px rgba(59,130,246,0.4),
+inset 0 0 6px rgba(59,130,246,0.3);
+
+animation: glowPulse 2.5s infinite ease-in-out;
+transition: 0.3s;
+}
+
+/* ===== GLOW ANIMATION ===== */
+@keyframes glowPulse {
+0% {
+box-shadow:
+0 0 6px rgba(59,130,246,0.4),
+0 0 12px rgba(59,130,246,0.3),
+inset 0 0 6px rgba(59,130,246,0.2);
+}
+50% {
+box-shadow:
+0 0 12px rgba(59,130,246,0.8),
+0 0 20px rgba(59,130,246,0.6),
+inset 0 0 10px rgba(59,130,246,0.4);
+}
+100% {
+box-shadow:
+0 0 6px rgba(59,130,246,0.4),
+0 0 12px rgba(59,130,246,0.3),
+inset 0 0 6px rgba(59,130,246,0.2);
+}
+}
+
+/* ===== HOVER EFFECT ===== */
+.logo-icon:hover {
+transform: scale(1.1);
+}
+
+/* ===== RESPONSIVE (mobil) ===== */
+@media (max-width: 600px) {
+.logo-icon {
+width: 32px;
+height: 32px;
+}
+
+.logo-title {
+gap: 8px;
+}
+}
