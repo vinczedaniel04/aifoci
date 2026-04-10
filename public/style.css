@@ -55,9 +55,9 @@ z-index: 0;
 background: conic-gradient(
 from 0deg,
 transparent 0deg,
-transparent 300deg,
-rgba(0, 240, 255, 1) 320deg,
-rgba(0, 255, 157, 1) 340deg,
+transparent 355deg,
+rgba(0, 240, 255, 1) 358deg,
+rgba(0, 255, 157, 1) 359deg,
 rgba(0, 240, 255, 1) 360deg
 );
 
