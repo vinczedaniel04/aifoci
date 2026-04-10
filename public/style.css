@@ -57,15 +57,15 @@ z-index: 0;
 .header-glow-line::before {
 content: "";
 position: absolute;
-width: 16px;
-height: 16px;
-border-radius: 50%;
+width: 60px;
+height: 6px;
+border-radius: 10px;
 background: radial-gradient(circle, #00f0ff 0%, #00ff9d 45%, #9d00ff 100%);
 box-shadow:
-0 0 8px rgba(0, 240, 255, 0.9),
-0 0 16px rgba(0, 255, 157, 0.7),
-0 0 24px rgba(157, 0, 255, 0.55);
-animation: borderDot 6s linear infinite;
+0 0 10px rgba(0, 240, 255, 0.9),
+0 0 20px rgba(0, 255, 157, 0.7),
+0 0 30px rgba(157, 0, 255, 0.55);
+animation: borderDot 8s linear infinite;
 }
 
 .brand-header {
