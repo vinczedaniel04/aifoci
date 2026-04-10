@@ -438,63 +438,73 @@ function createLeagueBlock(league) {
 }
 
 function renderOverallStats(overallStats) {
- const total = overallStats?.total || 0;
- const exact = overallStats?.exact || 0;
- const over = overallStats?.over || 0;
- const btts = overallStats?.btts || 0;
+const total = overallStats?.total || 0;
+const exact = overallStats?.exact || 0;
+const over = overallStats?.over || 0;
+const btts = overallStats?.btts || 0;
+const winner = overallStats?.winner || 0;
 
- const exactPct = total ? ((exact / total) * 100).toFixed(0) : 0;
- const overPct = total ? ((over / total) * 100).toFixed(0) : 0;
- const bttsPct = total ? ((btts / total) * 100).toFixed(0) : 0;
+const exactPct = total ? ((exact / total) * 100).toFixed(0) : 0;
+const overPct = total ? ((over / total) * 100).toFixed(0) : 0;
+const bttsPct = total ? ((btts / total) * 100).toFixed(0) : 0;
+const winnerPct = total ? ((winner / total) * 100).toFixed(0) : 0;
 
- const isOpen = localStorage.getItem(OPEN_STATS_KEY) === "true";
+const isOpen = localStorage.getItem(OPEN_STATS_KEY) === "true";
 
- aiStatsEl.innerHTML = `
- <section class="card top-stat-card top-stat-collapsible">
- <button class="top-stat-toggle" type="button">
- <div class="top-stat-header">
- <div>
- <div class="top-stat-kicker">Összesített AI stat</div>
- <div class="top-stat-title">AI teljesítmény</div>
- </div>
- <div class="top-stat-right">
- <div class="top-stat-badge">${total} meccs</div>
- <span class="arrow ${isOpen ? "open" : ""}"></span>
- </div>
- </div>
- </button>
+aiStatsEl.innerHTML = `
+<section class="card top-stat-card top-stat-collapsible">
+<button class="top-stat-toggle" type="button">
+<div class="top-stat-header">
+<div>
+<div class="top-stat-kicker">Összesített AI stat</div>
+<div class="top-stat-title">AI teljesítmény</div>
+</div>
+<div class="top-stat-right">
+<div class="top-stat-badge">${total} meccs</div>
+<span class="arrow ${isOpen ? "open" : ""}"></span>
+</div>
+</div>
+</button>
 
- <div class="top-stat-body ${isOpen ? "open" : ""}">
- <div class="top-stat-grid">
- <div class="top-mini-box">
- <span class="label">Pontos eredmény</span>
- <strong>${exact}</strong>
- <small>${exactPct}%</small>
- </div>
- <div class="top-mini-box">
- <span class="label">Over 2.5 találat</span>
- <strong>${over}</strong>
- <small>${overPct}%</small>
- </div>
- <div class="top-mini-box">
- <span class="label">Mindkét csapat gól</span>
- <strong>${btts}</strong>
- <small>${bttsPct}%</small>
- </div>
- </div>
- </div>
- </section>
- `;
+<div class="top-stat-body ${isOpen ? "open" : ""}">
+<div class="top-stat-grid">
+<div class="top-mini-box">
+<span class="label">Pontos eredmény</span>
+<strong>${exact}</strong>
+<small>${exactPct}%</small>
+</div>
 
- const toggleBtn = aiStatsEl.querySelector(".top-stat-toggle");
- const body = aiStatsEl.querySelector(".top-stat-body");
- const arrow = aiStatsEl.querySelector(".arrow");
+<div class="top-mini-box">
+<span class="label">Helyes 1X2 tipp</span>
+<strong>${winner}</strong>
+<small>${winnerPct}%</small>
+</div>
 
- toggleBtn.addEventListener("click", () => {
- const nowOpen = body.classList.toggle("open");
- arrow.classList.toggle("open", nowOpen);
- localStorage.setItem(OPEN_STATS_KEY, String(nowOpen));
- });
+<div class="top-mini-box">
+<span class="label">Over 2.5 találat</span>
+<strong>${over}</strong>
+<small>${overPct}%</small>
+</div>
+
+<div class="top-mini-box">
+<span class="label">Mindkét csapat gól</span>
+<strong>${btts}</strong>
+<small>${bttsPct}%</small>
+</div>
+</div>
+</div>
+</section>
+`;
+
+const toggleBtn = aiStatsEl.querySelector(".top-stat-toggle");
+const body = aiStatsEl.querySelector(".top-stat-body");
+const arrow = aiStatsEl.querySelector(".arrow");
+
+toggleBtn.addEventListener("click", () => {
+const nowOpen = body.classList.toggle("open");
+arrow.classList.toggle("open", nowOpen);
+localStorage.setItem(OPEN_STATS_KEY, String(nowOpen));
+});
 }
 
 function renderData(payload) {
