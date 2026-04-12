@@ -708,7 +708,8 @@ window.addEventListener("DOMContentLoaded", async () => {
  }
  });
 
- setInterval(() => {
- loadPredictions(true, true);
+ setInterval(async () => {
+ await fetch("/.netlify/functions/sync-matches");
+ await fetch("/.netlify/functions/sync-predictions");
  }, 60000);
 });
