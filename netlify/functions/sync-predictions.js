@@ -111,30 +111,29 @@ exports.handler = async function () {
  const awayDefense = regressTowardMean(awayDefenseRaw, 1.10, 0.32) / awayLeagueStrength;
 
  const homeStrengthBoost = (homeWinRate - awayWinRate) * 0.045;
-const leagueBalanceBoost = (homeLeagueStrength - awayLeagueStrength) * 0.06;
-const homeAdvantage = Number(settings.home_advantage || 0.05) * 0.7;
+ const leagueBalanceBoost = (homeLeagueStrength - awayLeagueStrength) * 0.06;
+ const homeAdvantage = Number(settings.home_advantage || 0.05) * 0.7;
 
-let expectedHomeGoals =
+ let expectedHomeGoals =
  (homeAttack * Number(settings.home_attack_weight || 0.52)) +
  (awayDefense * Number(settings.away_defense_weight || 0.48)) +
  homeAdvantage +
  homeStrengthBoost +
  leagueBalanceBoost;
 
-let expectedAwayGoals =
+ let expectedAwayGoals =
  (awayAttack * Number(settings.away_attack_weight || 0.52)) +
  (homeDefense * Number(settings.home_defense_weight || 0.48)) -
  (homeStrengthBoost * 0.08) -
  (leagueBalanceBoost * 0.12);
 
-// Ha két erős csapat játszik, ne engedjünk nagy mesterséges eltérést
-const bothStrong =
+ const bothStrong =
  homeLeagueStrength >= 0.93 &&
  awayLeagueStrength >= 0.93 &&
  awayAttackRaw >= 1.45 &&
  homeAttackRaw >= 1.45;
 
-if (bothStrong) {
+ if (bothStrong) {
  const diff = expectedHomeGoals - expectedAwayGoals;
  if (Math.abs(diff) > 0.18) {
  const correctedDiff = diff * 0.38;
@@ -142,18 +141,18 @@ if (bothStrong) {
  expectedHomeGoals = avg + correctedDiff / 2;
  expectedAwayGoals = avg - correctedDiff / 2;
  }
-}
+ }
 
-// Ha a két csapat közel van egymáshoz, húzzuk közelebb döntetlenesebb zónába
-const teamGap =
+ const teamGap =
  Math.abs(homeAttackRaw - awayAttackRaw) +
  Math.abs(homeDefenseRaw - awayDefenseRaw);
 
-if (teamGap < 0.45) {
+ if (teamGap < 0.45) {
  const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
  expectedHomeGoals = (expectedHomeGoals * 0.35) + (avg * 0.65);
  expectedAwayGoals = (expectedAwayGoals * 0.35) + (avg * 0.65);
-}
+ }
+
  expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.45, 2.5);
  expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.45, 2.4);
 
@@ -259,6 +258,243 @@ if (teamGap < 0.45) {
  if (homeGoals > awayGoals) return "HOME";
  if (awayGoals > homeGoals) return "AWAY";
  return "DRAW";
+ }
+
+ async function saveAiTicketIfMissing() {
+ const { data: existingTicket, error: existingTicketError } = await supabase
+ .from("ai_tickets")
+ .select("id, ticket_day")
+ .eq("ticket_day", matchDay)
+ .maybeSingle();
+
+ if (existingTicketError) throw existingTicketError;
+
+ if (existingTicket) {
+ return {
+ created: false,
+ already_exists: true,
+ ticket_id: existingTicket.id
+ };
+ }
+
+ const { data: todayPredictions, error: todayPredictionsError } = await supabase
+ .from("predictions_history")
+ .select("*")
+ .gte("match_date", `${matchDay}T00:00:00`)
+ .lte("match_date", `${matchDay}T23:59:59`)
+ .order("match_date", { ascending: true });
+
+ if (todayPredictionsError) throw todayPredictionsError;
+
+ const rows = todayPredictions || [];
+ const picks = [];
+
+ for (const row of rows) {
+ const homeProb = Number(row.predicted_home_win_probability || 0);
+ const drawProb = Number(row.predicted_draw_probability || 0);
+ const awayProb = Number(row.predicted_away_win_probability || 0);
+ const overProb = Number(row.predicted_over25_probability || 0);
+ const bttsProb = Number(row.predicted_btts_probability || 0);
+ const totalGoals =
+ Number(row.predicted_home_goals || 0) + Number(row.predicted_away_goals || 0);
+
+ if (homeProb >= 55) {
+ picks.push({
+ match_id: row.match_id,
+ competition_code: row.competition_code,
+ home_team_name: row.home_team_name,
+ away_team_name: row.away_team_name,
+ pick_type: "HOME_WIN",
+ pick_label: "Hazai győzelem",
+ pick_value: homeProb
+ });
+ }
+
+ if (awayProb >= 55) {
+ picks.push({
+ match_id: row.match_id,
+ competition_code: row.competition_code,
+ home_team_name: row.home_team_name,
+ away_team_name: row.away_team_name,
+ pick_type: "AWAY_WIN",
+ pick_label: "Vendég győzelem",
+ pick_value: awayProb
+ });
+ }
+
+ if (drawProb >= 40) {
+ picks.push({
+ match_id: row.match_id,
+ competition_code: row.competition_code,
+ home_team_name: row.home_team_name,
+ away_team_name: row.away_team_name,
+ pick_type: "DRAW",
+ pick_label: "Döntetlen",
+ pick_value: drawProb
+ });
+ }
+
+ if (overProb >= 62 && totalGoals >= 2.7) {
+ picks.push({
+ match_id: row.match_id,
+ competition_code: row.competition_code,
+ home_team_name: row.home_team_name,
+ away_team_name: row.away_team_name,
+ pick_type: "OVER25",
+ pick_label: "Over 2.5",
+ pick_value: overProb
+ });
+ }
+
+ if (bttsProb >= 60 && row.final_btts_tip === "IGEN") {
+ picks.push({
+ match_id: row.match_id,
+ competition_code: row.competition_code,
+ home_team_name: row.home_team_name,
+ away_team_name: row.away_team_name,
+ pick_type: "BTTS_YES",
+ pick_label: "Mindkét csapat gól",
+ pick_value: bttsProb
+ });
+ }
+ }
+
+ const deduped = [];
+ const seen = new Set();
+
+ for (const pick of picks.sort((a, b) => b.pick_value - a.pick_value)) {
+ const key = `${pick.match_id}_${pick.pick_type}`;
+ if (seen.has(key)) continue;
+ seen.add(key);
+ deduped.push(pick);
+ }
+
+ const finalPicks = deduped.slice(0, 5);
+
+ const { data: ticketInsert, error: ticketInsertError } = await supabase
+ .from("ai_tickets")
+ .insert({
+ ticket_day: matchDay,
+ title: "Mai AI Tippmix",
+ total_picks: finalPicks.length,
+ hits: 0,
+ is_full_hit: false
+ })
+ .select()
+ .single();
+
+ if (ticketInsertError) throw ticketInsertError;
+
+ if (finalPicks.length > 0) {
+ const pickRows = finalPicks.map((pick) => ({
+ ticket_id: ticketInsert.id,
+ match_id: pick.match_id,
+ competition_code: pick.competition_code,
+ home_team_name: pick.home_team_name,
+ away_team_name: pick.away_team_name,
+ pick_type: pick.pick_type,
+ pick_label: pick.pick_label,
+ pick_value: pick.pick_value
+ }));
+
+ const { error: picksInsertError } = await supabase
+ .from("ai_ticket_picks")
+ .insert(pickRows);
+
+ if (picksInsertError) throw picksInsertError;
+ }
+
+ return {
+ created: true,
+ already_exists: false,
+ ticket_id: ticketInsert.id,
+ saved_picks: finalPicks.length
+ };
+ }
+
+ async function refreshAiTicketResults() {
+ const { data: picks, error: picksError } = await supabase
+ .from("ai_ticket_picks")
+ .select("*");
+
+ if (picksError) throw picksError;
+
+ for (const pick of picks || []) {
+ const { data: match, error: matchError } = await supabase
+ .from("matches")
+ .select("*")
+ .eq("match_id", pick.match_id)
+ .maybeSingle();
+
+ if (matchError) throw matchError;
+ if (!match) continue;
+ if ((match.status || "").toUpperCase() !== "FINISHED") continue;
+
+ const home = Number(match.full_time_home);
+ const away = Number(match.full_time_away);
+
+ if (Number.isNaN(home) || Number.isNaN(away)) continue;
+
+ let isHit = false;
+
+ if (pick.pick_type === "HOME_WIN") {
+ isHit = home > away;
+ }
+
+ if (pick.pick_type === "AWAY_WIN") {
+ isHit = away > home;
+ }
+
+ if (pick.pick_type === "DRAW") {
+ isHit = home === away;
+ }
+
+ if (pick.pick_type === "OVER25") {
+ isHit = home + away >= 3;
+ }
+
+ if (pick.pick_type === "BTTS_YES") {
+ isHit = home > 0 && away > 0;
+ }
+
+ const { error: updatePickError } = await supabase
+ .from("ai_ticket_picks")
+ .update({ is_hit: isHit })
+ .eq("id", pick.id);
+
+ if (updatePickError) throw updatePickError;
+ }
+
+ const { data: tickets, error: ticketsError } = await supabase
+ .from("ai_tickets")
+ .select("*");
+
+ if (ticketsError) throw ticketsError;
+
+ for (const ticket of tickets || []) {
+ const { data: ticketPicks, error: ticketPicksError } = await supabase
+ .from("ai_ticket_picks")
+ .select("*")
+ .eq("ticket_id", ticket.id);
+
+ if (ticketPicksError) throw ticketPicksError;
+ if (!ticketPicks || ticketPicks.length === 0) continue;
+
+ const hits = ticketPicks.filter((p) => p.is_hit === true).length;
+ const allFinished = ticketPicks.every((p) => p.is_hit !== null);
+ const isFullHit = allFinished && hits === ticketPicks.length;
+
+ const { error: updateTicketError } = await supabase
+ .from("ai_tickets")
+ .update({
+ hits,
+ is_full_hit: isFullHit,
+ total_picks: ticketPicks.length
+ })
+ .eq("id", ticket.id);
+
+ if (updateTicketError) throw updateTicketError;
+ }
  }
 
  const { data: matches, error: matchesError } = await supabase
@@ -393,8 +629,8 @@ if (teamGap < 0.45) {
  predicted_1x2_pick: prediction.predicted_1x2_pick,
  predicted_corners_total: prediction.predicted_corners_total,
  predicted_cards_total: prediction.predicted_cards_total,
- final_over25_tip: prediction.final_over25_tip,
- final_btts_tip: prediction.final_btts_tip,
+ final_over25_tip: prediction.final_over25Tip || prediction.final_over25_tip,
+ final_btts_tip: prediction.finalBttsTip || prediction.final_btts_tip,
  used_home_advantage: prediction.used_home_advantage,
  used_over25_threshold: prediction.used_over25_threshold,
  used_btts_threshold: prediction.used_btts_threshold,
@@ -459,14 +695,14 @@ if (teamGap < 0.45) {
  if (existingRowError) throw existingRowError;
  if (!existingRow) continue;
 
- const isFinished = (row.status || "").toUpperCase() === "FINISHED";
+ const isFinishedLocked = (row.status || "").toUpperCase() === "FINISHED";
 
  let exact_hit = null;
  let over25_hit = null;
  let btts_hit = null;
  let winner_hit = null;
 
- if (isFinished) {
+ if (isFinishedLocked) {
  const actualScore = `${row.actual_home_goals ?? 0}-${row.actual_away_goals ?? 0}`;
  const actualTotal = (row.actual_home_goals ?? 0) + (row.actual_away_goals ?? 0);
  const actualBtts =
@@ -558,6 +794,9 @@ if (teamGap < 0.45) {
  if (updateError) throw updateError;
  }
 
+ const aiTicket = await saveAiTicketIfMissing();
+ await refreshAiTicketResults();
+
  return {
  statusCode: 200,
  headers: { "content-type": "application/json" },
@@ -567,7 +806,8 @@ if (teamGap < 0.45) {
  updated_locked: rowsToUpdateLocked.length,
  updated_unlocked: rowsToUpdateUnlocked.length,
  patched_1x2_locked: rowsToPatch1X2.length,
- match_day: matchDay
+ match_day: matchDay,
+ ai_ticket: aiTicket
  })
  };
  } catch (error) {
