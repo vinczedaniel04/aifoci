@@ -105,23 +105,33 @@ export default async () => {
  (isBeforeMidnightWindow || isAfterMidnightWindow || isMorningWindow) &&
  minute % 10 === 0;
 
- // LIVE meccsnél ne minden percben menjen a sync-matches, csak 2 percenként
+ // Nappali meccsidőablak: itt akkor is frissítsünk, ha még nincs LIVE,
+ // mert különben beragadhatnak a mai meccsek és eredmények.
+ const isDaytimeFootballWindow = hour >= 10 && hour <= 23;
+
+ // LIVE meccsnél mehet minden percben
  const shouldSyncMatchesBecauseLive = hasLive;
 
- // Ha nincs live, de van közelgő meccs, elég ritkábban frissíteni
- const shouldSyncMatchesBecauseUpcoming =
- !hasLive && hasUpcoming && minute % 10 === 0;
+ // Ha nincs live, de nappal van és vannak mai meccsek / közelgő meccsek,
+ // akkor 5 percenként frissítsünk.
+ const shouldSyncMatchesBecauseDayWindow =
+ !hasLive &&
+ isDaytimeFootballWindow &&
+ (hasUpcoming || hasFinished || rows.length > 0) &&
+ minute % 5 === 0;
 
- // Ha már vannak mai meccsek és mind lementek, ritkán vagy egyáltalán ne zaklassuk
- const shouldSyncMatchesBecauseFinishedOnly =
- !hasLive && !hasUpcoming && hasFinished && false;
+ // Ha nincs live, de van közelgő meccs, marad a 10 perces ritmus is
+ const shouldSyncMatchesBecauseUpcoming =
+ !hasLive &&
+ hasUpcoming &&
+ minute % 10 === 0;
 
  const shouldSyncMatches =
  shouldSyncMatchesBecauseLive ||
+ shouldSyncMatchesBecauseDayWindow ||
  shouldSyncMatchesBecauseUpcoming ||
  shouldRefreshListWindow ||
- rows.length === 0 ||
- shouldSyncMatchesBecauseFinishedOnly;
+ rows.length === 0;
 
  const shouldSyncTeamForm =
  !hasLive &&
@@ -141,8 +151,10 @@ export default async () => {
  hasUpcoming,
  hasFinished,
  todayCount: rows.length,
+ isDaytimeFootballWindow,
  shouldSyncMatches,
  shouldSyncMatchesBecauseLive,
+ shouldSyncMatchesBecauseDayWindow,
  shouldSyncMatchesBecauseUpcoming,
  shouldRefreshListWindow,
  shouldSyncTeamForm,
