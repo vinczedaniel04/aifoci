@@ -132,21 +132,21 @@ function getMatchStatusBadge(item) {
  }
 
  if (status === "PAUSED") {
-return `
-<div class="half-badge">
-⏸ Félidő
-</div>
-`;
-}
+ return `
+ <div class="half-badge">
+ Félidő
+ </div>
+ `;
+ }
 
-if (status === "LIVE" || status === "IN_PLAY") {
-return `
-<div class="live-badge">
-<span class="live-dot"></span>
-Élő
-</div>
-`;
-}
+ if (status === "LIVE" || status === "IN_PLAY") {
+ return `
+ <div class="live-badge">
+ <span class="live-dot"></span>
+ Élő
+ </div>
+ `;
+ }
 
  return `<div class="scheduled-badge">KÖZELGŐ</div>`;
 }
@@ -544,75 +544,72 @@ function renderOverallStats(overallStats) {
  });
 }
 
-function renderAiTicket(payload) {
+async function loadSavedAiTicket() {
+ try {
+ const res = await fetch("/.netlify/functions/read-ai-ticket");
+ const data = await res.json();
+
+ if (!res.ok) {
+ throw new Error(data.error || "Nem sikerült betölteni az AI ticketet");
+ }
+
+ return data;
+ } catch (err) {
+ console.error("AI ticket load error:", err.message);
+ return { ticket: null, picks: [] };
+ }
+}
+
+function renderSavedAiTicket(data) {
  const container = document.getElementById("ai-ticket");
  if (!container) return;
 
- const matches = payload?.predictions || [];
- container.innerHTML = "";
+ const ticket = data?.ticket || null;
+ const picks = data?.picks || [];
 
- const picks = [];
-
- matches.forEach((m) => {
- const homeProb = Number(m.predicted_home_win_probability || 0);
- const drawProb = Number(m.predicted_draw_probability || 0);
- const awayProb = Number(m.predicted_away_win_probability || 0);
- const totalGoals =
- Number(m.predicted_home_goals || 0) + Number(m.predicted_away_goals || 0);
- const bttsProb = Number(m.predicted_btts_probability || 0);
-
- if (homeProb >= 50) {
- picks.push({
- label: `${m.home_team_name} győzelem`,
- strength: homeProb
- });
+ if (!ticket || !picks.length) {
+ container.innerHTML = `<div class="ticket-empty">Nincs mai AI szelvény</div>`;
+ return;
  }
 
- if (awayProb >= 50) {
- picks.push({
- label: `${m.away_team_name} győzelem`,
- strength: awayProb
- });
- }
+ const hits = Number(ticket.hits || 0);
+ const total = Number(ticket.total_picks || picks.length || 0);
+ const settledCount = picks.filter((p) => p.is_hit !== null).length;
 
- if (drawProb >= 38) {
- picks.push({
- label: `${m.home_team_name} - ${m.away_team_name}: Döntetlen`,
- strength: drawProb
- });
- }
+ const headerBadge = ticket.is_full_hit
+ ? " FULL HIT"
+ : `${hits}/${total}`;
 
- if (totalGoals >= 2.7) {
- picks.push({
- label: `${m.home_team_name} - ${m.away_team_name}: Over 2.5`,
- strength: Number(m.predicted_over25_probability || 0)
- });
- }
-
- if (bttsProb >= 55) {
- picks.push({
- label: `${m.home_team_name} - ${m.away_team_name}: Mindkét csapat gól`,
- strength: bttsProb
- });
- }
- });
-
- picks
- .sort((a, b) => b.strength - a.strength)
- .slice(0, 5)
- .forEach((pick) => {
- const div = document.createElement("div");
- div.className = "ticket-pick";
- div.innerHTML = `
- <div class="ticket-pick-text">${pick.label}</div>
- <div class="ticket-pick-strength">${pick.strength.toFixed(0)}%</div>
+ const header = `
+ <div class="ticket-pick">
+ <div class="ticket-pick-text">
+ <strong>${ticket.title || "Mai AI Tippmix"}</strong><br>
+ <small>Értékelt tippek: ${settledCount}/${total}</small>
+ </div>
+ <div class="ticket-pick-strength">${headerBadge}</div>
+ </div>
  `;
- container.appendChild(div);
- });
 
- if (!picks.length) {
- container.innerHTML = `<div class="ticket-empty">Ma még nincs elég erős AI tippmix szelvény.</div>`;
- }
+ const picksHtml = picks
+ .map((pick) => {
+ let badge = `${Number(pick.pick_value || 0).toFixed(0)}%`;
+
+ if (pick.is_hit === true) badge = " ";
+ if (pick.is_hit === false) badge = " ";
+
+ return `
+ <div class="ticket-pick">
+ <div class="ticket-pick-text">
+ ${pick.home_team_name} - ${pick.away_team_name}<br>
+ <small>${pick.pick_label}</small>
+ </div>
+ <div class="ticket-pick-strength">${badge}</div>
+ </div>
+ `;
+ })
+ .join("");
+
+ container.innerHTML = header + picksHtml;
 }
 
 function renderData(payload) {
@@ -621,7 +618,6 @@ function renderData(payload) {
  const leagues = Object.values(grouped);
 
  renderOverallStats(payload.overall_stats || { total: 0, exact: 0, over: 0, btts: 0, winner: 0 });
- renderAiTicket(payload);
 
  const newList = document.createElement("div");
 
@@ -653,6 +649,10 @@ async function loadPredictions(forceRefresh = false, silent = false) {
 
  if (Date.now() - parsed.time < CACHE_TIME) {
  renderData(parsed.data);
+
+ const cachedTicketData = await loadSavedAiTicket();
+ renderSavedAiTicket(cachedTicketData);
+
  if (!silent && statusEl) statusEl.textContent = "Frissítve";
  return parsed.data;
  }
@@ -675,6 +675,9 @@ async function loadPredictions(forceRefresh = false, silent = false) {
  );
 
  renderData(data);
+
+ const ticketData = await loadSavedAiTicket();
+ renderSavedAiTicket(ticketData);
 
  if (!silent && statusEl) {
  statusEl.textContent = `Betöltve DB-ből: ${(data.predictions || []).length} mai predikció`;
