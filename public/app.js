@@ -711,5 +711,6 @@ window.addEventListener("DOMContentLoaded", async () => {
  setInterval(async () => {
  await fetch("/.netlify/functions/sync-matches");
  await fetch("/.netlify/functions/sync-predictions");
+ await loadPredictions(true, true);
  }, 60000);
 });
