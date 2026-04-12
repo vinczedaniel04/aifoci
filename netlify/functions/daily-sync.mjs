@@ -99,37 +99,16 @@ export default async () => {
 
  const isBeforeMidnightWindow = hour === 23 && minute >= 45;
  const isAfterMidnightWindow = hour === 0 && minute <= 20;
- const isMorningWindow = hour >= 6 && hour <= 9;
-
- const shouldRefreshListWindow =
- (isBeforeMidnightWindow || isAfterMidnightWindow || isMorningWindow) &&
- minute % 10 === 0;
-
- // Nappali meccsidőablak: itt akkor is frissítsünk, ha még nincs LIVE,
- // mert különben beragadhatnak a mai meccsek és eredmények.
+ const isEarlyMorningWindow = hour >= 5 && hour <= 6;
  const isDaytimeFootballWindow = hour >= 10 && hour <= 23;
 
- // LIVE meccsnél mehet minden percben
- const shouldSyncMatchesBecauseLive = hasLive;
-
- // Ha nincs live, de nappal van és vannak mai meccsek / közelgő meccsek,
- // akkor 5 percenként frissítsünk.
- const shouldSyncMatchesBecauseDayWindow =
- !hasLive &&
- isDaytimeFootballWindow &&
- (hasUpcoming || hasFinished || rows.length > 0) &&
- minute % 5 === 0;
-
- // Ha nincs live, de van közelgő meccs, marad a 10 perces ritmus is
- const shouldSyncMatchesBecauseUpcoming =
- !hasLive &&
- hasUpcoming &&
- minute % 10 === 0;
+ const shouldRefreshListWindow =
+ isBeforeMidnightWindow ||
+ isAfterMidnightWindow ||
+ isEarlyMorningWindow;
 
  const shouldSyncMatches =
- shouldSyncMatchesBecauseLive ||
- shouldSyncMatchesBecauseDayWindow ||
- shouldSyncMatchesBecauseUpcoming ||
+ isDaytimeFootballWindow ||
  shouldRefreshListWindow ||
  rows.length === 0;
 
@@ -139,10 +118,10 @@ export default async () => {
  minute % 10 === 0;
 
  const shouldSyncPredictions =
- hasLive ||
  shouldSyncMatches ||
  shouldSyncTeamForm ||
- (hasUpcoming && minute % 10 === 0);
+ hasLive ||
+ hasUpcoming;
 
  console.log(" daily-sync indul", {
  budapestHour: hour,
@@ -151,12 +130,12 @@ export default async () => {
  hasUpcoming,
  hasFinished,
  todayCount: rows.length,
+ isBeforeMidnightWindow,
+ isAfterMidnightWindow,
+ isEarlyMorningWindow,
  isDaytimeFootballWindow,
- shouldSyncMatches,
- shouldSyncMatchesBecauseLive,
- shouldSyncMatchesBecauseDayWindow,
- shouldSyncMatchesBecauseUpcoming,
  shouldRefreshListWindow,
+ shouldSyncMatches,
  shouldSyncTeamForm,
  shouldSyncPredictions
  });
