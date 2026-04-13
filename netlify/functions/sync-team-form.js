@@ -216,6 +216,7 @@ exports.handler = async function () {
  .filter((m) => m.awayTeam?.id === team.team_id)
  .slice(0, 10);
 
+ const last10AllMatches = sortedMatches.slice(0, 10);
  const recentAllMatches = sortedMatches.slice(0, 5);
 
  function mapStats(matchList, isHome) {
@@ -244,7 +245,7 @@ exports.handler = async function () {
  });
  }
 
- function mapRecentAllStats(matchList) {
+ function mapAllStats(matchList) {
  return matchList.map((m) => {
  const isHome = m.homeTeam?.id === team.team_id;
 
@@ -259,6 +260,8 @@ exports.handler = async function () {
  return {
  goalsFor,
  goalsAgainst,
+ over25: goalsFor + goalsAgainst >= 3 ? 1 : 0,
+ btts: goalsFor > 0 && goalsAgainst > 0 ? 1 : 0,
  win: goalsFor > goalsAgainst ? 1 : 0,
  draw: goalsFor === goalsAgainst ? 1 : 0,
  loss: goalsFor < goalsAgainst ? 1 : 0
@@ -268,7 +271,8 @@ exports.handler = async function () {
 
  const homeStats = mapStats(homeMatches, true);
  const awayStats = mapStats(awayMatches, false);
- const recentAllStats = mapRecentAllStats(recentAllMatches);
+ const last10Stats = mapAllStats(last10AllMatches);
+ const recentAllStats = mapAllStats(recentAllMatches);
 
  const combinedStats = [...homeStats, ...awayStats];
 
@@ -289,6 +293,12 @@ exports.handler = async function () {
  last_5_count: Math.min(recentAllMatches.length, 5),
  home_last_10_count: homeMatches.length,
  away_last_10_count: awayMatches.length,
+
+ // ÚJ LAST10 OVERALL
+ last10_avg_goals_for: weightedAverage(last10Stats.map(x => x.goalsFor), 1.3),
+ last10_avg_goals_against: weightedAverage(last10Stats.map(x => x.goalsAgainst), 1.2),
+ last10_over25_rate: weightedRate(last10Stats.map(x => x.over25), 0),
+ last10_btts_rate: weightedRate(last10Stats.map(x => x.btts), 0),
 
  avg_goals_for: weightedAverage(combinedStats.map((x) => x.goalsFor), 1.2),
  avg_goals_against: weightedAverage(combinedStats.map((x) => x.goalsAgainst), 1.2),
@@ -321,7 +331,7 @@ exports.handler = async function () {
  last_finished_match_date: lastFinishedMatchDate,
  updated_at: new Date().toISOString()
  };
- }
+}
 
  const fetchedRows = [];
 
