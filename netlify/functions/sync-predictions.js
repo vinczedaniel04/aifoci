@@ -91,12 +91,26 @@ exports.handler = async function () {
  if (settingsError) throw settingsError;
  if (!settingsRow) throw new Error("Nincs aktív model_settings sor.");
 
- function predictMatch(match, homeForm, awayForm, settings) {
+function predictMatch(match, homeForm, awayForm, settings) {
+
  const homeAttackRaw = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
  const homeDefenseRaw = Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
 
  const awayAttackRaw = Number(awayForm.avg_goals_for_away ?? awayForm.avg_goals_for ?? 1.0);
  const awayDefenseRaw = Number(awayForm.avg_goals_against_away ?? awayForm.avg_goals_against ?? 1.0);
+
+ // LAST10 FORM
+ const homeLast10Attack = Number(homeForm.last10_avg_goals_for ?? 1.3);
+ const awayLast10Attack = Number(awayForm.last10_avg_goals_for ?? 1.2);
+
+ const homeLast10Defense = Number(homeForm.last10_avg_goals_against ?? 1.2);
+ const awayLast10Defense = Number(awayForm.last10_avg_goals_against ?? 1.2);
+
+ const homeOverTrend = Number(homeForm.last10_over25_rate ?? 50);
+ const awayOverTrend = Number(awayForm.last10_over25_rate ?? 50);
+
+ const homeBttsTrend = Number(homeForm.last10_btts_rate ?? 50);
+ const awayBttsTrend = Number(awayForm.last10_btts_rate ?? 50);
 
  const homeWinRate = softCapRate(homeForm.home_win_rate);
  const awayWinRate = softCapRate(awayForm.away_win_rate);
@@ -127,6 +141,25 @@ exports.handler = async function () {
  (homeStrengthBoost * 0.08) -
  (leagueBalanceBoost * 0.12);
 
+ // FORM BOOST
+ expectedHomeGoals += (homeLast10Attack - 1.3) * 0.35;
+ expectedAwayGoals += (awayLast10Attack - 1.2) * 0.35;
+
+ expectedHomeGoals += (awayLast10Defense - 1.2) * 0.25;
+ expectedAwayGoals += (homeLast10Defense - 1.2) * 0.25;
+
+ // OVER TREND BOOST
+ if ((homeOverTrend + awayOverTrend) / 2 > 65) {
+ expectedHomeGoals += 0.2;
+ expectedAwayGoals += 0.2;
+ }
+
+ // BTTS TREND BOOST
+ if ((homeBttsTrend + awayBttsTrend) / 2 > 60) {
+ expectedHomeGoals += 0.15;
+ expectedAwayGoals += 0.15;
+ }
+
  const bothStrong =
  homeLeagueStrength >= 0.93 &&
  awayLeagueStrength >= 0.93 &&
@@ -136,7 +169,7 @@ exports.handler = async function () {
  if (bothStrong) {
  const diff = expectedHomeGoals - expectedAwayGoals;
  if (Math.abs(diff) > 0.18) {
- const correctedDiff = diff * 0.38;
+ const correctedDiff = diff * 0.58;
  const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
  expectedHomeGoals = avg + correctedDiff / 2;
  expectedAwayGoals = avg - correctedDiff / 2;
@@ -149,15 +182,16 @@ exports.handler = async function () {
 
  if (teamGap < 0.45) {
  const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
- expectedHomeGoals = (expectedHomeGoals * 0.35) + (avg * 0.65);
- expectedAwayGoals = (expectedAwayGoals * 0.35) + (avg * 0.65);
+ expectedHomeGoals = (expectedHomeGoals * 0.6) + (avg * 0.4);
+ expectedAwayGoals = (expectedAwayGoals * 0.6) + (avg * 0.4);
  }
 
- expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.45, 2.5);
- expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.45, 2.4);
+ expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.45, 2.7);
+ expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.45, 2.6);
 
  let bestProbability = 0;
  let bestScore = "0-0";
+
  let over25 = 0;
  let btts = 0;
  let homeWin = 0;
@@ -169,8 +203,12 @@ exports.handler = async function () {
  const probability =
  poisson(expectedHomeGoals, h) * poisson(expectedAwayGoals, a);
 
- if (probability > bestProbability) {
- bestProbability = probability;
+ let adjusted = probability;
+
+ if (h === a) adjusted *= 0.93; // draw nerf
+
+ if (adjusted > bestProbability) {
+ bestProbability = adjusted;
  bestScore = `${h}-${a}`;
  }
 
@@ -190,38 +228,21 @@ exports.handler = async function () {
  awayWin /= probabilitySum;
  }
 
- const corners = estimateCorners(expectedHomeGoals, expectedAwayGoals);
- const cards = estimateCards(expectedHomeGoals, expectedAwayGoals);
  const totalGoals = expectedHomeGoals + expectedAwayGoals;
 
  let finalOver25Tip = "2,5 ALATT";
- if (
- over25 >= Number(settings.over25_threshold || 0.6) &&
- totalGoals >= Number(settings.min_total_goals_for_over || 2.6)
- ) {
+ if (over25 >= 0.6 && totalGoals >= 2.6) {
  finalOver25Tip = "2,5 FELETT";
  }
 
  let finalBttsTip = "NEM";
- if (
- btts >= Number(settings.btts_threshold || 0.6) &&
- expectedHomeGoals >= Number(settings.min_team_goal_for_btts || 0.95) &&
- expectedAwayGoals >= Number(settings.min_team_goal_for_btts || 0.95)
- ) {
+ if (btts >= 0.6 && expectedHomeGoals >= 0.95 && expectedAwayGoals >= 0.95) {
  finalBttsTip = "IGEN";
  }
 
  let predicted1x2Pick = "DRAW";
- if (homeWin > draw && homeWin > awayWin) {
- predicted1x2Pick = "HOME";
- } else if (awayWin > homeWin && awayWin > draw) {
- predicted1x2Pick = "AWAY";
- }
-
- const strongerSide =
- expectedHomeGoals >= expectedAwayGoals
- ? match.home_team_name
- : match.away_team_name;
+ if (homeWin > draw && homeWin > awayWin) predicted1x2Pick = "HOME";
+ else if (awayWin > homeWin && awayWin > draw) predicted1x2Pick = "AWAY";
 
  return {
  predicted_score: bestScore,
@@ -234,20 +255,10 @@ exports.handler = async function () {
  predicted_draw_probability: Number((draw * 100).toFixed(2)),
  predicted_away_win_probability: Number((awayWin * 100).toFixed(2)),
  predicted_1x2_pick: predicted1x2Pick,
- predicted_corners_total: corners.total,
- predicted_cards_total: cards.total,
  final_over25_tip: finalOver25Tip,
- final_btts_tip: finalBttsTip,
- used_home_advantage: homeAdvantage,
- used_over25_threshold: Number(settings.over25_threshold || 0.6),
- used_btts_threshold: Number(settings.btts_threshold || 0.6),
- explanation: `A modell súlyozott forma, ligaerő és stabilizált topcsapat-korrekció alapján számol. A várható gólok: ${match.home_team_name} ${expectedHomeGoals.toFixed(
- 2
- )}, ${match.away_team_name} ${expectedAwayGoals.toFixed(
- 2
- )}. Enyhe fölényben van: ${strongerSide}.`
+ final_btts_tip: finalBttsTip
  };
- }
+}
 
  function getActual1x2Result(match) {
  const homeGoals = match.full_time_home;
