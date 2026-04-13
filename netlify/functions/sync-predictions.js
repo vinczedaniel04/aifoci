@@ -380,7 +380,12 @@ function predictMatch(match, homeForm, awayForm, settings) {
  deduped.push(pick);
  }
 
- const finalPicks = deduped.slice(0, 5);
+ if(finalPicks.length < 2 ) 
+    {return
+    {created:false;
+    reason:"Nincs elég erős tipp a mai napra"
+    };
+}
 
  const { data: ticketInsert, error: ticketInsertError } = await supabase
  .from("ai_tickets")
