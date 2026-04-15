@@ -375,22 +375,26 @@ function predictMatch(match, homeForm, awayForm, settings) {
  }
  }
 
- const deduped = [];
+const deduped = [];
  const seen = new Set();
 
  for (const pick of picks.sort((a, b) => b.pick_value - a.pick_value)) {
- const key = `${pick.match_id}_${pick.pick_type}`;
- if (seen.has(key)) continue;
- seen.add(key);
- deduped.push(pick);
+   const key = `${pick.match_id}_${pick.pick_type}`;
+   if (seen.has(key)) continue;
+   seen.add(key);
+   deduped.push(pick);
  }
 
- if(finalPicks.length < 2 ) 
-    {return
-    {created:false;
-    reason:"Nincs elég erős tipp a mai napra"
-    };
-}
+ // --- EZ A SOR HIÁNYZOTT: Itt hozzuk létre a finalPicks változót! ---
+ const finalPicks = deduped.slice(0, 5);
+
+ // --- JAVÍTOTT RETURN SZINTAXIS ---
+ if (finalPicks.length < 2) {
+   return {
+     created: false,
+     reason: "Nincs elég erős tipp a mai napra"
+   };
+ }
 
  const { data: ticketInsert, error: ticketInsertError } = await supabase
  .from("ai_tickets")
