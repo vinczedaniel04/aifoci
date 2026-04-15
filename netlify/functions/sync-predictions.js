@@ -118,8 +118,13 @@ function predictMatch(match, homeForm, awayForm, settings) {
  const homeLeagueStrength = Number(homeForm.source_league_strength ?? 0.90);
  const awayLeagueStrength = Number(awayForm.source_league_strength ?? 0.90);
 
- const homeAttack = regressTowardMean(homeAttackRaw, 1.70, 0.38) * homeLeagueStrength;
- const awayAttack = regressTowardMean(awayAttackRaw, 1.45, 0.38) * awayLeagueStrength;
+ // ÚJ: Dinamikus beállítások beolvasása az adatbázisból (vagy alapértelmezett érték)
+ const meanRegression = Number(settings.mean_regression_strength || 0.35);
+ const formBoost = Number(settings.form_boost_weight || 0.35);
+
+ // Itt már a dinamikus meanRegression-t használjuk
+ const homeAttack = regressTowardMean(homeAttackRaw, 1.70, meanRegression) * homeLeagueStrength;
+ const awayAttack = regressTowardMean(awayAttackRaw, 1.45, meanRegression) * awayLeagueStrength;
 
  const homeDefense = regressTowardMean(homeDefenseRaw, 1.10, 0.32) / homeLeagueStrength;
  const awayDefense = regressTowardMean(awayDefenseRaw, 1.10, 0.32) / awayLeagueStrength;
@@ -141,9 +146,9 @@ function predictMatch(match, homeForm, awayForm, settings) {
  (homeStrengthBoost * 0.08) -
  (leagueBalanceBoost * 0.12);
 
- // FORM BOOST
- expectedHomeGoals += (homeLast10Attack - 1.3) * 0.35;
- expectedAwayGoals += (awayLast10Attack - 1.2) * 0.35;
+ // FORM BOOST - Itt már a dinamikus formBoost változót használjuk
+ expectedHomeGoals += (homeLast10Attack - 1.3) * formBoost;
+ expectedAwayGoals += (awayLast10Attack - 1.2) * formBoost;
 
  expectedHomeGoals += (awayLast10Defense - 1.2) * 0.25;
  expectedAwayGoals += (homeLast10Defense - 1.2) * 0.25;
