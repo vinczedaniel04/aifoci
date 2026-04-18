@@ -314,7 +314,7 @@ function predictMatch(match, homeForm, awayForm, settings) {
  const totalGoals =
  Number(row.predicted_home_goals || 0) + Number(row.predicted_away_goals || 0);
 
- if (homeProb >= 55) {
+ if (homeProb >= 50) {
  picks.push({
  match_id: row.match_id,
  competition_code: row.competition_code,
@@ -326,7 +326,7 @@ function predictMatch(match, homeForm, awayForm, settings) {
  });
  }
 
- if (awayProb >= 55) {
+ if (awayProb >= 50) {
  picks.push({
  match_id: row.match_id,
  competition_code: row.competition_code,
