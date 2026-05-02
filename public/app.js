@@ -227,7 +227,56 @@ function getMarketToneStyle(value) {
  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.08);
  `;
 }
+function renderFormBadge(result) {
+  const value = String(result || "").toUpperCase();
 
+  let className = "form-badge form-badge-draw";
+  let label = value;
+
+  if (value === "GY") {
+    className = "form-badge form-badge-win";
+    label = "GY";
+  } else if (value === "V") {
+    className = "form-badge form-badge-loss";
+    label = "V";
+  } else {
+    className = "form-badge form-badge-draw";
+    label = "D";
+  }
+
+  return `<span class="${className}">${label}</span>`;
+}
+
+function renderTeamForm(title, form) {
+  const items = Array.isArray(form) ? form : [];
+
+  if (!items.length) {
+    return `
+      <div class="team-form-row">
+        <span class="team-form-title">${title}</span>
+        <span class="team-form-empty">Nincs elég adat</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="team-form-row">
+      <span class="team-form-title">${title}</span>
+      <div class="team-form-badges">
+        ${items.map(renderFormBadge).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderMatchForms(item) {
+  return `
+    <div class="match-forms">
+      ${renderTeamForm(item.home_team_name, item.home_form)}
+      ${renderTeamForm(item.away_team_name, item.away_form)}
+    </div>
+  `;
+}
 function render1X2Row(item) {
  const home = Number(item.predicted_home_win_probability || 0);
  const draw = Number(item.predicted_draw_probability || 0);
@@ -266,6 +315,57 @@ function render1X2Row(item) {
  </div>
  <div class="market-right">${away.toFixed(0)}%</div>
  </div>
+ </div>
+ `;
+}
+
+function renderFormBadge(result) {
+ const value = String(result || "").toUpperCase();
+
+ let className = "form-badge form-badge-draw";
+ let label = "D";
+
+ if (value === "GY") {
+ className = "form-badge form-badge-win";
+ label = "GY";
+ } else if (value === "V") {
+ className = "form-badge form-badge-loss";
+ label = "V";
+ } else if (value === "D") {
+ className = "form-badge form-badge-draw";
+ label = "D";
+ }
+
+ return `<span class="${className}">${label}</span>`;
+}
+
+function renderTeamForm(title, form) {
+ const items = Array.isArray(form) ? form : [];
+
+ if (!items.length) {
+ return `
+ <div class="team-form-row">
+ <span class="team-form-title">${title}</span>
+ <span class="team-form-empty">Nincs adat</span>
+ </div>
+ `;
+ }
+
+ return `
+ <div class="team-form-row">
+ <span class="team-form-title">${title}</span>
+ <div class="team-form-badges">
+ ${items.map(renderFormBadge).join("")}
+ </div>
+ </div>
+ `;
+}
+
+function renderMatchForms(item) {
+ return `
+ <div class="match-forms">
+ ${renderTeamForm(item.home_team_name, item.home_form)}
+ ${renderTeamForm(item.away_team_name, item.away_form)}
  </div>
  `;
 }
@@ -376,6 +476,7 @@ function createMatchCard(item) {
  </button>
 
  <div class="match-body ${isOpen ? "open" : ""}">
+ ${renderMatchForms(item)}
  ${render1X2Row(item)}
 
  <div class="compact-grid">
