@@ -114,24 +114,23 @@ export default async () => {
   - Csapatforma: 15 percenként, csak ha nincs élő meccs.
   - Befejezett meccseknél: 10 percenként frissítjük a találati statokat.
  */
-
- const shouldSyncMatches =
+const shouldSyncMatches =
   hasLive ||
   rows.length === 0 ||
   shouldRefreshListWindow ||
   (hasUpcoming && minute % 5 === 0) ||
   (hasFinished && minute % 10 === 0);
 
- const shouldSyncTeamForm =
+const shouldSyncTeamForm =
   !hasLive &&
   hasUpcoming &&
   minute % 15 === 0;
 
- const shouldSyncPredictions =
-  hasLive ||
+const shouldSyncPredictions =
+  rows.length === 0 ||
   shouldSyncTeamForm ||
-  (hasUpcoming && minute % 5 === 0) ||
-  (hasFinished && minute % 10 === 0);
+  shouldRefreshListWindow ||
+  (hasUpcoming && minute % 15 === 0);
 
  console.log("daily-sync indul", {
   budapestHour: hour,
