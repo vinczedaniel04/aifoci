@@ -29,7 +29,7 @@ body {
   padding: 20px;
 }
 
-/* ===== HEADER (ÚJ NEON EFFEKTTEL) ===== */
+/* ===== HEADER ===== */
 
 header {
   text-align: center;
@@ -44,20 +44,20 @@ header {
   margin: 0 auto 26px auto;
   border-radius: 30px;
   overflow: hidden;
-  padding: 3px; /* Ez a futó LED csík vastagsága */
-  display: flex; 
+  padding: 3px;
+  display: flex;
 }
 
 .header-glow-line {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 250%; 
+  width: 250%;
   height: 250%;
   background: conic-gradient(
-    from 0deg, 
-    transparent 60%, 
-    #00f0ff 80%, 
+    from 0deg,
+    transparent 60%,
+    #00f0ff 80%,
     #9d00ff 100%
   );
   transform: translate(-50%, -50%);
@@ -73,7 +73,6 @@ header {
   padding: 28px 18px;
   border-radius: 28px;
   border: 1px solid rgba(146, 177, 230, 0.2);
-  /* ITT A JAVÍTÁS: Teljesen fedő sötétkék háttér, átlátszóság nélkül */
   background: linear-gradient(180deg, #0c1c38, #061123);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.03),
@@ -121,14 +120,30 @@ header {
 }
 
 @keyframes spinLed {
-  0% { transform: translate(-50%, -50%) rotate(0deg); }
-  100% { transform: translate(-50%, -50%) rotate(360deg); }
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
 
 @keyframes pulseLive {
-  0% { transform: scale(0.85); opacity: 0.6; }
-  50% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(0.85); opacity: 0.6; }
+  0% {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
 }
 
 /* ===== HIDE OLD PANEL ===== */
@@ -453,7 +468,7 @@ button:hover {
   display: block;
 }
 
-/* ===== MATCH CARD (ÚJ HOVER EFFEKTTEL) ===== */
+/* ===== MATCH CARD ===== */
 
 .match-card {
   margin: 18px;
@@ -461,19 +476,18 @@ button:hover {
   overflow: hidden;
   border-radius: 30px;
   background: linear-gradient(180deg, rgba(16, 33, 60, 1), rgba(4, 18, 43, 1));
-  border: 1px solid rgba(146, 177, 230, 0.1); /* Halvány alap keret */
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); /* Lágy átmenet */
+  border: 1px solid rgba(146, 177, 230, 0.1);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
-/* Lebegés és neon világítás rámutatáskor */
 .match-card:hover {
   transform: translateY(-6px);
-  border-color: rgba(0, 240, 255, 0.5); /* Cián neon keret */
+  border-color: rgba(0, 240, 255, 0.5);
   box-shadow:
-    0 15px 35px rgba(0, 0, 0, 0.4), /* Erős alsó árnyék */
-    0 0 20px rgba(0, 240, 255, 0.2), /* Külső cián ragyogás */
-    inset 0 0 15px rgba(157, 0, 255, 0.1); /* Belső lila ragyogás */
+    0 15px 35px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(0, 240, 255, 0.2),
+    inset 0 0 15px rgba(157, 0, 255, 0.1);
 }
 
 .match-header {
@@ -510,15 +524,17 @@ button:hover {
   font-weight: 900;
   width: fit-content;
 }
+
 .half-badge {
-background: rgba(255, 165, 0, 0.15);
-color: orange;
-border: 1px solid rgba(255, 165, 0, 0.4);
-padding: 4px 10px;
-border-radius: 8px;
-font-size: 12px;
-font-weight: 600;
+  background: rgba(255, 165, 0, 0.15);
+  color: orange;
+  border: 1px solid rgba(255, 165, 0, 0.4);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
+
 .finished-badge {
   background: rgba(34, 197, 94, 0.15);
   color: #4ade80;
@@ -569,6 +585,18 @@ font-weight: 600;
   text-align: right;
 }
 
+.team-name-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.away-name-wrap {
+  align-items: flex-end;
+}
+
 .team-name {
   word-break: break-word;
   line-height: 1.15;
@@ -590,65 +618,51 @@ font-weight: 600;
   min-width: 22px;
   text-align: center;
 }
-.match-forms {
-  display: grid;
-  gap: 8px;
-  margin: 12px 0;
-  padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.35);
-}
 
-.team-form-row {
+/* ===== TEAM FORM BADGES ===== */
+
+.inline-team-form {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.team-form-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #e5e7eb;
-  line-height: 1.2;
-}
-
-.team-form-badges {
-  display: flex;
   gap: 5px;
-  flex-shrink: 0;
+  min-height: 22px;
+  flex-wrap: wrap;
+}
+
+.inline-team-form.empty {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 700;
 }
 
 .form-badge {
-  min-width: 26px;
-  height: 24px;
+  min-width: 25px;
+  height: 22px;
   padding: 0 7px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   color: #ffffff;
   letter-spacing: 0.02em;
+  line-height: 1;
 }
 
 .form-badge-win {
   background: #16a34a;
+  box-shadow: 0 0 10px rgba(22, 163, 74, 0.28);
 }
 
 .form-badge-draw {
   background: #6b7280;
+  box-shadow: 0 0 10px rgba(107, 114, 128, 0.22);
 }
 
 .form-badge-loss {
   background: #dc2626;
-}
-
-.team-form-empty {
-  font-size: 12px;
-  color: #94a3b8;
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.25);
 }
 
 .vs-block {
@@ -681,7 +695,7 @@ font-weight: 600;
   display: block;
 }
 
-/* ===== 1X2 (ÚJ HOVER EFFEKTTEL) ===== */
+/* ===== 1X2 ===== */
 
 .market-row {
   display: grid;
@@ -700,11 +714,10 @@ font-weight: 600;
   justify-content: space-between;
   padding: 12px 18px;
   gap: 10px;
-  transition: all 0.2s ease; /* Átmenet hozzáadva */
-  cursor: pointer; /* Egér mutató ikon */
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
-/* Szorzó gombok hover effektje */
 .market-pill:hover {
   background: rgba(123, 134, 255, 0.15);
   border-color: rgba(123, 134, 255, 0.6);
@@ -1022,10 +1035,26 @@ font-weight: 600;
     min-width: 0;
   }
 
+  .team-name-wrap {
+    gap: 5px;
+  }
+
   .team-name {
     font-size: 14px;
     line-height: 1.2;
     overflow-wrap: anywhere;
+  }
+
+  .inline-team-form {
+    gap: 3px;
+    min-height: 19px;
+  }
+
+  .form-badge {
+    min-width: 21px;
+    height: 19px;
+    padding: 0 5px;
+    font-size: 9px;
   }
 
   .team-logo {
@@ -1151,6 +1180,17 @@ font-weight: 600;
 
   .team-name {
     font-size: 13px;
+  }
+
+  .inline-team-form {
+    gap: 2px;
+  }
+
+  .form-badge {
+    min-width: 19px;
+    height: 18px;
+    padding: 0 4px;
+    font-size: 8px;
   }
 
   .team-score {

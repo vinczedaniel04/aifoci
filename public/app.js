@@ -25,20 +25,20 @@ function buildGoalMatrix(expectedHomeGoals, expectedAwayGoals) {
  let topCell = "0-0";
 
  for (let home = 0; home <= 4; home += 1) {
- const row = [];
- for (let away = 0; away <= 4; away += 1) {
- const probability =
- poisson(expectedHomeGoals, home) * poisson(expectedAwayGoals, away);
- const percent = Number((probability * 100).toFixed(1));
+  const row = [];
+  for (let away = 0; away <= 4; away += 1) {
+   const probability =
+    poisson(expectedHomeGoals, home) * poisson(expectedAwayGoals, away);
+   const percent = Number((probability * 100).toFixed(1));
 
- if (percent > maxProbability) {
- maxProbability = percent;
- topCell = `${home}-${away}`;
- }
+   if (percent > maxProbability) {
+    maxProbability = percent;
+    topCell = `${home}-${away}`;
+   }
 
- row.push({ home, away, percent });
- }
- matrix.push(row);
+   row.push({ home, away, percent });
+  }
+  matrix.push(row);
  }
 
  return { matrix, topCell };
@@ -46,8 +46,8 @@ function buildGoalMatrix(expectedHomeGoals, expectedAwayGoals) {
 
 function renderGoalMatrix(expectedHomeGoals, expectedAwayGoals) {
  const { matrix, topCell } = buildGoalMatrix(
- expectedHomeGoals,
- expectedAwayGoals
+  expectedHomeGoals,
+  expectedAwayGoals
  );
 
  let html = `
@@ -68,14 +68,14 @@ function renderGoalMatrix(expectedHomeGoals, expectedAwayGoals) {
  `;
 
  for (let home = 0; home < matrix.length; home += 1) {
- html += `<tr><th>${home}</th>`;
- for (let away = 0; away < matrix[home].length; away += 1) {
- const cell = matrix[home][away];
- const score = `${cell.home}-${cell.away}`;
- const topClass = score === topCell ? "top-prob" : "";
- html += `<td class="${topClass}">${cell.percent}%</td>`;
- }
- html += `</tr>`;
+  html += `<tr><th>${home}</th>`;
+  for (let away = 0; away < matrix[home].length; away += 1) {
+   const cell = matrix[home][away];
+   const score = `${cell.home}-${cell.away}`;
+   const topClass = score === topCell ? "top-prob" : "";
+   html += `<td class="${topClass}">${cell.percent}%</td>`;
+  }
+  html += `</tr>`;
  }
 
  html += `
@@ -90,16 +90,16 @@ function renderGoalMatrix(expectedHomeGoals, expectedAwayGoals) {
 
 function formatCompetitionName(code, fallback) {
  const map = {
- CL: "Bajnokok Ligája",
- PL: "Premier League",
- PD: "La Liga",
- BL1: "Bundesliga",
- SA: "Serie A",
- FL1: "Ligue 1",
- PPL: "Primeira Liga",
- DED: "Eredivisie",
- ELC: "Championship",
- BSA: "Brazil Serie A"
+  CL: "Bajnokok Ligája",
+  PL: "Premier League",
+  PD: "La Liga",
+  BL1: "Bundesliga",
+  SA: "Serie A",
+  FL1: "Ligue 1",
+  PPL: "Primeira Liga",
+  DED: "Eredivisie",
+  ELC: "Championship",
+  BSA: "Brazil Serie A"
  };
 
  return map[code] || fallback || code;
@@ -109,16 +109,16 @@ function groupByLeague(items) {
  const grouped = {};
 
  for (const item of items) {
- const key = item.competition_code || item.competition_name;
- if (!grouped[key]) {
- grouped[key] = {
- code: item.competition_code,
- name: formatCompetitionName(item.competition_code, item.competition_name),
- emblem: item.competition_emblem || "",
- items: []
- };
- }
- grouped[key].items.push(item);
+  const key = item.competition_code || item.competition_name;
+  if (!grouped[key]) {
+   grouped[key] = {
+    code: item.competition_code,
+    name: formatCompetitionName(item.competition_code, item.competition_name),
+    emblem: item.competition_emblem || "",
+    items: []
+   };
+  }
+  grouped[key].items.push(item);
  }
 
  return grouped;
@@ -128,11 +128,11 @@ function getMatchStatusBadge(item) {
  const status = (item.status || "").toUpperCase();
 
  if (status === "FINISHED") {
- return `<div class="finished-badge">LEJÁTSZVA</div>`;
+  return `<div class="finished-badge">LEJÁTSZVA</div>`;
  }
 
  if (status === "PAUSED") {
- return `
+  return `
  <div class="half-badge">
  Félidő
  </div>
@@ -140,7 +140,7 @@ function getMatchStatusBadge(item) {
  }
 
  if (status === "LIVE" || status === "IN_PLAY") {
- return `
+  return `
  <div class="live-badge">
  <span class="live-dot"></span>
  Élő
@@ -171,30 +171,30 @@ function wireToggleButtons(rootEl) {
  const buttons = rootEl.querySelectorAll("[data-toggle-target]");
 
  buttons.forEach((btn) => {
- btn.addEventListener("click", (event) => {
- event.stopPropagation();
+  btn.addEventListener("click", (event) => {
+   event.stopPropagation();
 
- const targetId = btn.getAttribute("data-toggle-target");
- const target = rootEl.querySelector(`#${targetId}`);
- if (!target) return;
+   const targetId = btn.getAttribute("data-toggle-target");
+   const target = rootEl.querySelector(`#${targetId}`);
+   if (!target) return;
 
- const isOpen = target.classList.contains("open");
- target.classList.toggle("open");
+   const isOpen = target.classList.contains("open");
+   target.classList.toggle("open");
 
- const arrow = btn.querySelector(".arrow");
- if (arrow) {
- arrow.classList.toggle("open", !isOpen);
- }
- });
+   const arrow = btn.querySelector(".arrow");
+   if (arrow) {
+    arrow.classList.toggle("open", !isOpen);
+   }
+  });
  });
 }
 
 function loadOpenState(key) {
  try {
- const raw = localStorage.getItem(key);
- return raw ? JSON.parse(raw) : {};
+  const raw = localStorage.getItem(key);
+  return raw ? JSON.parse(raw) : {};
  } catch {
- return {};
+  return {};
  }
 }
 
@@ -206,7 +206,7 @@ function getMarketToneStyle(value) {
  const percent = Number(value || 0);
 
  if (percent >= 50) {
- return `
+  return `
  background: linear-gradient(135deg, rgba(34, 197, 94, 0.22) 0%, rgba(59, 130, 246, 0.18) 55%, #050a12 100%);
  border-color: rgba(74, 222, 128, 0.45);
  box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.12);
@@ -214,7 +214,7 @@ function getMarketToneStyle(value) {
  }
 
  if (percent < 30) {
- return `
+  return `
  background: linear-gradient(135deg, rgba(239, 68, 68, 0.20) 0%, rgba(59, 130, 246, 0.14) 55%, #050a12 100%);
  border-color: rgba(248, 113, 113, 0.35);
  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.10);
@@ -227,56 +227,50 @@ function getMarketToneStyle(value) {
  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.08);
  `;
 }
+
 function renderFormBadge(result) {
-  const value = String(result || "").toUpperCase();
+ const value = String(result || "").toUpperCase();
 
-  let className = "form-badge form-badge-draw";
-  let label = value;
+ let className = "form-badge form-badge-draw";
+ let label = "D";
 
-  if (value === "GY") {
-    className = "form-badge form-badge-win";
-    label = "GY";
-  } else if (value === "V") {
-    className = "form-badge form-badge-loss";
-    label = "V";
-  } else {
-    className = "form-badge form-badge-draw";
-    label = "D";
-  }
+ if (value === "GY") {
+  className = "form-badge form-badge-win";
+  label = "GY";
+ } else if (value === "V") {
+  className = "form-badge form-badge-loss";
+  label = "V";
+ } else if (value === "D") {
+  className = "form-badge form-badge-draw";
+  label = "D";
+ }
 
-  return `<span class="${className}">${label}</span>`;
+ return `<span class="${className}">${label}</span>`;
 }
 
-function renderTeamForm(title, form) {
-  const items = Array.isArray(form) ? form : [];
+function normalizeLastFiveForm(form) {
+ const items = Array.isArray(form) ? form : [];
 
-  if (!items.length) {
-    return `
-      <div class="team-form-row">
-        <span class="team-form-title">${title}</span>
-        <span class="team-form-empty">Nincs elég adat</span>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="team-form-row">
-      <span class="team-form-title">${title}</span>
-      <div class="team-form-badges">
-        ${items.map(renderFormBadge).join("")}
-      </div>
-    </div>
-  `;
+ return items
+  .map((x) => String(x || "").toUpperCase())
+  .filter((x) => ["GY", "D", "V"].includes(x))
+  .slice(0, 5);
 }
 
-function renderMatchForms(item) {
-  return `
-    <div class="match-forms">
-      ${renderTeamForm(item.home_team_name, item.home_form)}
-      ${renderTeamForm(item.away_team_name, item.away_form)}
-    </div>
-  `;
+function renderInlineTeamForm(form) {
+ const items = normalizeLastFiveForm(form);
+
+ if (!items.length) {
+  return `<div class="inline-team-form empty">Nincs adat</div>`;
+ }
+
+ return `
+ <div class="inline-team-form">
+ ${items.map(renderFormBadge).join("")}
+ </div>
+ `;
 }
+
 function render1X2Row(item) {
  const home = Number(item.predicted_home_win_probability || 0);
  const draw = Number(item.predicted_draw_probability || 0);
@@ -292,9 +286,9 @@ function render1X2Row(item) {
  <div class="market-pill ${home === max ? "active" : ""}" style="${homeStyle}">
  <div class="market-left">
  ${
- item.home_team_crest
- ? `<img src="${item.home_team_crest}" class="market-logo" alt="${item.home_team_name}">`
- : `<span class="market-short">1</span>`
+  item.home_team_crest
+   ? `<img src="${item.home_team_crest}" class="market-logo" alt="${item.home_team_name}">`
+   : `<span class="market-short">1</span>`
  }
  </div>
  <div class="market-right">${home.toFixed(0)}%</div>
@@ -308,64 +302,13 @@ function render1X2Row(item) {
  <div class="market-pill ${away === max ? "active" : ""}" style="${awayStyle}">
  <div class="market-left">
  ${
- item.away_team_crest
- ? `<img src="${item.away_team_crest}" class="market-logo" alt="${item.away_team_name}">`
- : `<span class="market-short">2</span>`
+  item.away_team_crest
+   ? `<img src="${item.away_team_crest}" class="market-logo" alt="${item.away_team_name}">`
+   : `<span class="market-short">2</span>`
  }
  </div>
  <div class="market-right">${away.toFixed(0)}%</div>
  </div>
- </div>
- `;
-}
-
-function renderFormBadge(result) {
- const value = String(result || "").toUpperCase();
-
- let className = "form-badge form-badge-draw";
- let label = "D";
-
- if (value === "GY") {
- className = "form-badge form-badge-win";
- label = "GY";
- } else if (value === "V") {
- className = "form-badge form-badge-loss";
- label = "V";
- } else if (value === "D") {
- className = "form-badge form-badge-draw";
- label = "D";
- }
-
- return `<span class="${className}">${label}</span>`;
-}
-
-function renderTeamForm(title, form) {
- const items = Array.isArray(form) ? form : [];
-
- if (!items.length) {
- return `
- <div class="team-form-row">
- <span class="team-form-title">${title}</span>
- <span class="team-form-empty">Nincs adat</span>
- </div>
- `;
- }
-
- return `
- <div class="team-form-row">
- <span class="team-form-title">${title}</span>
- <div class="team-form-badges">
- ${items.map(renderFormBadge).join("")}
- </div>
- </div>
- `;
-}
-
-function renderMatchForms(item) {
- return `
- <div class="match-forms">
- ${renderTeamForm(item.home_team_name, item.home_form)}
- ${renderTeamForm(item.away_team_name, item.away_form)}
  </div>
  `;
 }
@@ -378,15 +321,15 @@ function createMatchCard(item) {
  const isLive = ["LIVE", "IN_PLAY", "PAUSED"].includes(status);
 
  const resultLine = isFinished
- ? `<div class="time"><b>Végeredmény:</b> ${item.actual_home_goals ?? 0} - ${item.actual_away_goals ?? 0}</div>`
- : `<div class="time">Kezdés: ${new Date(item.match_date).toLocaleString("hu-HU")}</div>`;
+  ? `<div class="time"><b>Végeredmény:</b> ${item.actual_home_goals ?? 0} - ${item.actual_away_goals ?? 0}</div>`
+  : `<div class="time">Kezdés: ${new Date(item.match_date).toLocaleString("hu-HU")}</div>`;
 
  const homeGoals = isFinished ? (item.actual_home_goals ?? 0) : (item.live_home ?? 0);
  const awayGoals = isFinished ? (item.actual_away_goals ?? 0) : (item.live_away ?? 0);
  const showScore = isFinished || isLive;
 
  const totalGoals = (
- Number(item.predicted_home_goals || 0) + Number(item.predicted_away_goals || 0)
+  Number(item.predicted_home_goals || 0) + Number(item.predicted_away_goals || 0)
  ).toFixed(2);
 
  const bttsText = item.final_btts_tip === "IGEN" ? "Igen" : "Nem";
@@ -430,8 +373,8 @@ function createMatchCard(item) {
  `;
 
  const goalMatrixHtml = renderGoalMatrix(
- Number(item.predicted_home_goals || 0),
- Number(item.predicted_away_goals || 0)
+  Number(item.predicted_home_goals || 0),
+  Number(item.predicted_away_goals || 0)
  );
 
  const matchKey = String(item.match_id);
@@ -451,11 +394,14 @@ function createMatchCard(item) {
  <div class="teams-row">
  <div class="team-side">
  ${
- item.home_team_crest
- ? `<img src="${item.home_team_crest}" class="team-logo" alt="${item.home_team_name}">`
- : ""
+  item.home_team_crest
+   ? `<img src="${item.home_team_crest}" class="team-logo" alt="${item.home_team_name}">`
+   : ""
  }
+ <div class="team-name-wrap">
  <span class="team-name">${item.home_team_name}</span>
+ ${renderInlineTeamForm(item.home_form)}
+ </div>
  ${showScore ? `<span class="team-score">${homeGoals}</span>` : ""}
  </div>
 
@@ -463,11 +409,14 @@ function createMatchCard(item) {
 
  <div class="team-side away-side">
  ${showScore ? `<span class="team-score">${awayGoals}</span>` : ""}
+ <div class="team-name-wrap away-name-wrap">
  <span class="team-name">${item.away_team_name}</span>
+ ${renderInlineTeamForm(item.away_form)}
+ </div>
  ${
- item.away_team_crest
- ? `<img src="${item.away_team_crest}" class="team-logo" alt="${item.away_team_name}">`
- : ""
+  item.away_team_crest
+   ? `<img src="${item.away_team_crest}" class="team-logo" alt="${item.away_team_name}">`
+   : ""
  }
  </div>
  </div>
@@ -476,7 +425,6 @@ function createMatchCard(item) {
  </button>
 
  <div class="match-body ${isOpen ? "open" : ""}">
- ${renderMatchForms(item)}
  ${render1X2Row(item)}
 
  <div class="compact-grid">
@@ -506,12 +454,12 @@ function createMatchCard(item) {
  const arrow = card.querySelector(".match-header .arrow");
 
  headerBtn.addEventListener("click", () => {
- const nowOpen = body.classList.toggle("open");
- arrow.classList.toggle("open", nowOpen);
+  const nowOpen = body.classList.toggle("open");
+  arrow.classList.toggle("open", nowOpen);
 
- const current = loadOpenState(OPEN_MATCHES_KEY);
- current[matchKey] = nowOpen;
- saveOpenState(OPEN_MATCHES_KEY, current);
+  const current = loadOpenState(OPEN_MATCHES_KEY);
+  current[matchKey] = nowOpen;
+  saveOpenState(OPEN_MATCHES_KEY, current);
  });
 
  wireToggleButtons(card);
@@ -523,11 +471,11 @@ function createLeagueBlock(league) {
  const isOpen = !!openState[league.code];
 
  const liveCount = league.items.filter((x) =>
- ["LIVE", "IN_PLAY", "PAUSED"].includes((x.status || "").toUpperCase())
+  ["LIVE", "IN_PLAY", "PAUSED"].includes((x.status || "").toUpperCase())
  ).length;
 
  const finishedCount = league.items.filter(
- (x) => (x.status || "").toUpperCase() === "FINISHED"
+  (x) => (x.status || "").toUpperCase() === "FINISHED"
  ).length;
 
  const wrapper = document.createElement("section");
@@ -554,19 +502,19 @@ function createLeagueBlock(league) {
  if (isOpen) content.classList.add("open");
 
  for (const item of league.items) {
- content.appendChild(createMatchCard(item));
+  content.appendChild(createMatchCard(item));
  }
 
  header.addEventListener("click", () => {
- content.classList.toggle("open");
- const nowOpen = content.classList.contains("open");
+  content.classList.toggle("open");
+  const nowOpen = content.classList.contains("open");
 
- const arrow = header.querySelector(".arrow");
- if (arrow) arrow.classList.toggle("open", nowOpen);
+  const arrow = header.querySelector(".arrow");
+  if (arrow) arrow.classList.toggle("open", nowOpen);
 
- const currentState = loadOpenState(OPEN_LEAGUES_KEY);
- currentState[league.code] = nowOpen;
- saveOpenState(OPEN_LEAGUES_KEY, currentState);
+  const currentState = loadOpenState(OPEN_LEAGUES_KEY);
+  currentState[league.code] = nowOpen;
+  saveOpenState(OPEN_LEAGUES_KEY, currentState);
  });
 
  wrapper.appendChild(header);
@@ -639,25 +587,25 @@ function renderOverallStats(overallStats) {
  const arrow = aiStatsEl.querySelector(".arrow");
 
  toggleBtn.addEventListener("click", () => {
- const nowOpen = body.classList.toggle("open");
- arrow.classList.toggle("open", nowOpen);
- localStorage.setItem(OPEN_STATS_KEY, String(nowOpen));
+  const nowOpen = body.classList.toggle("open");
+  arrow.classList.toggle("open", nowOpen);
+  localStorage.setItem(OPEN_STATS_KEY, String(nowOpen));
  });
 }
 
 async function loadSavedAiTicket() {
  try {
- const res = await fetch("/.netlify/functions/read-ai-ticket");
- const data = await res.json();
+  const res = await fetch("/.netlify/functions/read-ai-ticket");
+  const data = await res.json();
 
- if (!res.ok) {
- throw new Error(data.error || "Nem sikerült betölteni az AI ticketet");
- }
+  if (!res.ok) {
+   throw new Error(data.error || "Nem sikerült betölteni az AI ticketet");
+  }
 
- return data;
+  return data;
  } catch (err) {
- console.error("AI ticket load error:", err.message);
- return { ticket: null, picks: [] };
+  console.error("AI ticket load error:", err.message);
+  return { ticket: null, picks: [] };
  }
 }
 
@@ -669,8 +617,8 @@ function renderSavedAiTicket(data) {
  const picks = data?.picks || [];
 
  if (!ticket || !picks.length) {
- container.innerHTML = `<div class="ticket-empty">Nincs mai AI szelvény</div>`;
- return;
+  container.innerHTML = `<div class="ticket-empty">Nincs mai AI szelvény</div>`;
+  return;
  }
 
  const hits = Number(ticket.hits || 0);
@@ -678,8 +626,8 @@ function renderSavedAiTicket(data) {
  const settledCount = picks.filter((p) => p.is_hit !== null).length;
 
  const headerBadge = ticket.is_full_hit
- ? " FULL HIT"
- : `${hits}/${total}`;
+  ? " FULL HIT"
+  : `${hits}/${total}`;
 
  const header = `
  <div class="ticket-pick">
@@ -692,13 +640,13 @@ function renderSavedAiTicket(data) {
  `;
 
  const picksHtml = picks
- .map((pick) => {
- let badge = `${Number(pick.pick_value || 0).toFixed(0)}%`;
+  .map((pick) => {
+   let badge = `${Number(pick.pick_value || 0).toFixed(0)}%`;
 
- if (pick.is_hit === true) badge = " ";
- if (pick.is_hit === false) badge = " ";
+   if (pick.is_hit === true) badge = " ";
+   if (pick.is_hit === false) badge = " ";
 
- return `
+   return `
  <div class="ticket-pick">
  <div class="ticket-pick-text">
  ${pick.home_team_name} - ${pick.away_team_name}<br>
@@ -707,8 +655,8 @@ function renderSavedAiTicket(data) {
  <div class="ticket-pick-strength">${badge}</div>
  </div>
  `;
- })
- .join("");
+  })
+  .join("");
 
  container.innerHTML = header + picksHtml;
 }
@@ -723,14 +671,14 @@ function renderData(payload) {
  const newList = document.createElement("div");
 
  if (!items.length) {
- statusEl.textContent = "Nincs mai predikció az adatbázisban.";
- listEl.innerHTML = "";
- return;
+  statusEl.textContent = "Nincs mai predikció az adatbázisban.";
+  listEl.innerHTML = "";
+  return;
  }
 
  leagues.forEach((league) => {
- const block = createLeagueBlock(league);
- newList.appendChild(block);
+  const block = createLeagueBlock(league);
+  newList.appendChild(block);
  });
 
  listEl.replaceChildren(...newList.childNodes);
@@ -738,58 +686,58 @@ function renderData(payload) {
 
 async function loadPredictions(forceRefresh = false, silent = false) {
  if (!silent && statusEl) {
- statusEl.textContent = "Betöltés...";
+  statusEl.textContent = "Betöltés...";
  }
 
  try {
- if (!forceRefresh) {
- const cached = localStorage.getItem(CACHE_KEY);
+  if (!forceRefresh) {
+   const cached = localStorage.getItem(CACHE_KEY);
 
- if (cached) {
- const parsed = JSON.parse(cached);
+   if (cached) {
+    const parsed = JSON.parse(cached);
 
- if (Date.now() - parsed.time < CACHE_TIME) {
- renderData(parsed.data);
+    if (Date.now() - parsed.time < CACHE_TIME) {
+     renderData(parsed.data);
 
- const cachedTicketData = await loadSavedAiTicket();
- renderSavedAiTicket(cachedTicketData);
+     const cachedTicketData = await loadSavedAiTicket();
+     renderSavedAiTicket(cachedTicketData);
 
- if (!silent && statusEl) statusEl.textContent = "Frissítve";
- return parsed.data;
- }
- }
- }
+     if (!silent && statusEl) statusEl.textContent = "Frissítve";
+     return parsed.data;
+    }
+   }
+  }
 
- const response = await fetch("/.netlify/functions/read-predictions");
- const data = await response.json();
+  const response = await fetch("/.netlify/functions/read-predictions");
+  const data = await response.json();
 
- if (!response.ok) {
- throw new Error(data.error || "Szerverhiba");
- }
+  if (!response.ok) {
+   throw new Error(data.error || "Szerverhiba");
+  }
 
- localStorage.setItem(
- CACHE_KEY,
- JSON.stringify({
- time: Date.now(),
- data
- })
- );
+  localStorage.setItem(
+   CACHE_KEY,
+   JSON.stringify({
+    time: Date.now(),
+    data
+   })
+  );
 
- renderData(data);
+  renderData(data);
 
- const ticketData = await loadSavedAiTicket();
- renderSavedAiTicket(ticketData);
+  const ticketData = await loadSavedAiTicket();
+  renderSavedAiTicket(ticketData);
 
- if (!silent && statusEl) {
- statusEl.textContent = `Betöltve DB-ből: ${(data.predictions || []).length} mai predikció`;
- }
+  if (!silent && statusEl) {
+   statusEl.textContent = `Betöltve DB-ből: ${(data.predictions || []).length} mai predikció`;
+  }
 
- return data;
+  return data;
  } catch (error) {
- if (!silent && statusEl) {
- statusEl.textContent = error.message || "Hiba történt.";
- }
- return null;
+  if (!silent && statusEl) {
+   statusEl.textContent = error.message || "Hiba történt.";
+  }
+  return null;
  }
 }
 
@@ -797,21 +745,21 @@ window.addEventListener("DOMContentLoaded", async () => {
  await loadPredictions(true, false);
 
  document.getElementById("ticketToggle")?.addEventListener("click", () => {
- const el = document.getElementById("ai-ticket");
- const arrow = document.getElementById("ticketArrow");
- if (!el) return;
+  const el = document.getElementById("ai-ticket");
+  const arrow = document.getElementById("ticketArrow");
+  if (!el) return;
 
- const nowOpen = el.style.display === "none" || el.style.display === "";
- el.style.display = nowOpen ? "block" : "none";
+  const nowOpen = el.style.display === "none" || el.style.display === "";
+  el.style.display = nowOpen ? "block" : "none";
 
- if (arrow) {
- arrow.textContent = nowOpen ? "▲" : "▼";
- }
+  if (arrow) {
+   arrow.textContent = nowOpen ? "▲" : "▼";
+  }
  });
 
  setInterval(async () => {
- await fetch("/.netlify/functions/sync-matches");
- await fetch("/.netlify/functions/sync-predictions");
- await loadPredictions(true, true);
+  await fetch("/.netlify/functions/sync-matches");
+  await fetch("/.netlify/functions/sync-predictions");
+  await loadPredictions(true, true);
  }, 60000);
 });
