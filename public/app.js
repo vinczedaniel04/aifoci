@@ -734,32 +734,31 @@ async function loadPredictions(forceRefresh = false, silent = false) {
 
   return data;
  } catch (error) {
+  console.error("Load predictions error:", error);
+
   if (!silent && statusEl) {
    statusEl.textContent = error.message || "Hiba történt.";
   }
+
   return null;
  }
 }
 
-window.addEventListener("DOMContentLoaded", async () => {
+async function runBackgroundSync(silent = true) {
  try {
-  if (statusEl) statusEl.textContent = "Meccsek frissítése...";
-
   await fetch("/.netlify/functions/sync-matches");
-
-  if (statusEl) statusEl.textContent = "Csapat formák frissítése...";
-
   await fetch("/.netlify/functions/sync-team-form");
-
-  if (statusEl) statusEl.textContent = "Predikciók frissítése...";
-
   await fetch("/.netlify/functions/sync-predictions");
-
-  await loadPredictions(true, false);
+  await loadPredictions(true, silent);
  } catch (error) {
-  console.error("Initial sync error:", error);
-  await loadPredictions(true, false);
+  console.error("Sync error:", error);
  }
+}
+
+window.addEventListener("DOMContentLoaded", async () => {
+ await loadPredictions(true, false);
+
+ runBackgroundSync(true);
 
  document.getElementById("ticketToggle")?.addEventListener("click", () => {
   const el = document.getElementById("ai-ticket");
@@ -775,13 +774,6 @@ window.addEventListener("DOMContentLoaded", async () => {
  });
 
  setInterval(async () => {
-  try {
-   await fetch("/.netlify/functions/sync-matches");
-   await fetch("/.netlify/functions/sync-team-form");
-   await fetch("/.netlify/functions/sync-predictions");
-   await loadPredictions(true, true);
-  } catch (error) {
-   console.error("Auto sync error:", error);
-  }
+  await runBackgroundSync(true);
  }, 60000);
 });
