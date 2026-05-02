@@ -17,24 +17,61 @@ exports.handler = async function () {
     }
 
     function normalizeTeamName(name) {
-      return String(name || "").trim();
+      return String(name || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
     }
 
-    function getTeamResult(match, teamName) {
-      const team = normalizeTeamName(teamName);
-      const homeTeam = normalizeTeamName(match.home_team_name);
-      const awayTeam = normalizeTeamName(match.away_team_name);
+    function getTeamIdentity(match, side) {
+      if (side === "home") {
+        return {
+          id: match.home_team_id || match.homeTeamId || null,
+          name: normalizeTeamName(match.home_team_name)
+        };
+      }
+
+      return {
+        id: match.away_team_id || match.awayTeamId || null,
+        name: normalizeTeamName(match.away_team_name)
+      };
+    }
+
+    function isSameTeam(match, team) {
+      const home = getTeamIdentity(match, "home");
+      const away = getTeamIdentity(match, "away");
+
+      if (team.id) {
+        return String(home.id) === String(team.id) || String(away.id) === String(team.id);
+      }
+
+      return home.name === team.name || away.name === team.name;
+    }
+
+    function getTeamResult(match, team) {
+      const home = getTeamIdentity(match, "home");
+      const away = getTeamIdentity(match, "away");
 
       const homeGoals = Number(match.actual_home_goals);
       const awayGoals = Number(match.actual_away_goals);
 
-      if (homeTeam === team) {
+      const isHome =
+        team.id
+          ? String(home.id) === String(team.id)
+          : home.name === team.name;
+
+      const isAway =
+        team.id
+          ? String(away.id) === String(team.id)
+          : away.name === team.name;
+
+      if (isHome) {
         if (homeGoals > awayGoals) return "GY";
         if (homeGoals === awayGoals) return "D";
         return "V";
       }
 
-      if (awayTeam === team) {
+      if (isAway) {
         if (awayGoals > homeGoals) return "GY";
         if (awayGoals === homeGoals) return "D";
         return "V";
@@ -43,30 +80,20 @@ exports.handler = async function () {
       return null;
     }
 
-    async function getLastFiveForm(teamName, beforeDate) {
-      const team = normalizeTeamName(teamName);
+    function getLastFiveFormFromFinishedMatches(team, currentMatchDate, finishedMatches) {
+      const currentTime = new Date(currentMatchDate).getTime();
 
-      if (!team) return [];
+      return finishedMatches
+        .filter((match) => {
+          const matchTime = new Date(match.match_date).getTime();
 
-      const { data, error } = await supabase
-        .from("predictions_history")
-        .select(
-          "match_date, home_team_name, away_team_name, actual_home_goals, actual_away_goals, status"
-        )
-        .eq("status", "FINISHED")
-        .not("actual_home_goals", "is", null)
-        .not("actual_away_goals", "is", null)
-        .lt("match_date", beforeDate)
-        .or(`home_team_name.eq.${team},away_team_name.eq.${team}`)
-        .order("match_date", { ascending: false })
-        .limit(5);
+          if (!Number.isFinite(matchTime)) return false;
+          if (Number.isFinite(currentTime) && matchTime >= currentTime) return false;
 
-      if (error) {
-        console.error(`Form query error for ${team}:`, error.message);
-        return [];
-      }
-
-      return (data || [])
+          return isSameTeam(match, team);
+        })
+        .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime())
+        .slice(0, 5)
         .map((match) => getTeamResult(match, team))
         .filter(Boolean);
     }
@@ -82,38 +109,43 @@ exports.handler = async function () {
 
     if (todayError) throw todayError;
 
-    const predictionsWithForm = await Promise.all(
-      (todayMatches || []).map(async (match) => {
-        const [homeForm, awayForm] = await Promise.all([
-          getLastFiveForm(match.home_team_name, match.match_date),
-          getLastFiveForm(match.away_team_name, match.match_date),
-        ]);
-
-        return {
-          ...match,
-          home_form: homeForm,
-          away_form: awayForm,
-        };
-      })
-    );
-
     const { data: finishedMatches, error: finishedError } = await supabase
       .from("predictions_history")
       .select("*")
       .eq("status", "FINISHED")
       .not("actual_home_goals", "is", null)
-      .not("actual_away_goals", "is", null);
+      .not("actual_away_goals", "is", null)
+      .order("match_date", { ascending: false });
 
     if (finishedError) throw finishedError;
 
     const finished = finishedMatches || [];
+
+    const predictionsWithForm = (todayMatches || []).map((match) => {
+      const homeTeam = getTeamIdentity(match, "home");
+      const awayTeam = getTeamIdentity(match, "away");
+
+      return {
+        ...match,
+        home_form: getLastFiveFormFromFinishedMatches(
+          homeTeam,
+          match.match_date,
+          finished
+        ),
+        away_form: getLastFiveFormFromFinishedMatches(
+          awayTeam,
+          match.match_date,
+          finished
+        )
+      };
+    });
 
     const overallStats = {
       total: finished.length,
       exact: finished.filter((m) => m.exact_hit).length,
       over: finished.filter((m) => m.over25_hit).length,
       btts: finished.filter((m) => m.btts_hit).length,
-      winner: finished.filter((m) => m.winner_hit).length,
+      winner: finished.filter((m) => m.winner_hit).length
     };
 
     return {
@@ -123,14 +155,14 @@ exports.handler = async function () {
         ok: true,
         match_day: today,
         predictions: predictionsWithForm,
-        overall_stats: overallStats,
-      }),
+        overall_stats: overallStats
+      })
     };
   } catch (err) {
     return {
       statusCode: 500,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ error: err.message }),
+      body: JSON.stringify({ error: err.message })
     };
   }
 };
