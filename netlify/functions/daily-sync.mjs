@@ -108,29 +108,35 @@ export default async () => {
 
  /*
   Sync logika:
-  - Ha van élő meccs: sync-matches + sync-predictions percenként.
-  - Ha nincs adat: sync-matches azonnal.
-  - Közelgő meccseknél: sync-matches és sync-predictions 5 percenként.
+  - Élő meccsnél: sync-matches percenként, majd sync-results.
+  - sync-results csak könnyű DB update: matches -> predictions_history.
+  - sync-predictions nem fut élőben percenként, mert drága és timeoutolhat.
+  - Közelgő meccseknél: sync-matches 5 percenként.
   - Csapatforma: 15 percenként, csak ha nincs élő meccs.
-  - Befejezett meccseknél: 10 percenként frissítjük a találati statokat.
+  - Predikció: nap elején / formafrissítés után / 15 percenként közelgő meccseknél.
+  - Befejezett meccseknél: sync-matches + sync-results 10 percenként.
  */
-const shouldSyncMatches =
+
+ const shouldSyncMatches =
   hasLive ||
   rows.length === 0 ||
   shouldRefreshListWindow ||
   (hasUpcoming && minute % 5 === 0) ||
   (hasFinished && minute % 10 === 0);
 
-const shouldSyncTeamForm =
+ const shouldSyncTeamForm =
   !hasLive &&
   hasUpcoming &&
   minute % 15 === 0;
 
-const shouldSyncPredictions =
+ const shouldSyncPredictions =
   rows.length === 0 ||
   shouldSyncTeamForm ||
   shouldRefreshListWindow ||
-  (hasUpcoming && minute % 15 === 0);
+  (hasUpcoming && !hasLive && minute % 15 === 0);
+
+ const shouldSyncResults =
+  shouldSyncMatches;
 
  console.log("daily-sync indul", {
   budapestHour: hour,
@@ -144,17 +150,20 @@ const shouldSyncPredictions =
   isEarlyMorningWindow,
   shouldRefreshListWindow,
   shouldSyncMatches,
+  shouldSyncResults,
   shouldSyncTeamForm,
   shouldSyncPredictions
  });
 
  let matches = null;
+ let results = null;
  let teamForm = null;
  let predictions = null;
  let training = null;
 
  if (shouldSyncMatches) {
   matches = await callFunction("sync-matches");
+  results = await callFunction("sync-results");
  }
 
  if (shouldSyncTeamForm) {
@@ -172,6 +181,7 @@ const shouldSyncPredictions =
 
  console.log("daily-sync kész", {
   matches,
+  results,
   teamForm,
   predictions,
   training
@@ -181,6 +191,7 @@ const shouldSyncPredictions =
   JSON.stringify({
    ok: true,
    matches,
+   results,
    teamForm,
    predictions,
    training,
@@ -192,6 +203,7 @@ const shouldSyncPredictions =
     hasFinished,
     todayCount: rows.length,
     shouldSyncMatches,
+    shouldSyncResults,
     shouldSyncTeamForm,
     shouldSyncPredictions
    }
