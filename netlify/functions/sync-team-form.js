@@ -186,7 +186,7 @@ exports.handler = async function () {
   }
 
   // Free tier miatt egyszerre csak keveset kérünk le.
-  const batch = teamsToFetch.slice(0, 2);
+  const batch = teamsToFetch.slice(0, 4);
 
   async function getRecentFinishedMatches(teamId) {
    const data = await fetchJson(
