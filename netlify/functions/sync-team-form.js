@@ -80,15 +80,19 @@ exports.handler = async function () {
  const teamsMap = new Map();
 
  for (const match of todayMatches || []) {
+ if (match.home_team_id) {
  teamsMap.set(match.home_team_id, {
  team_id: match.home_team_id,
  team_name: match.home_team_name
  });
+ }
 
+ if (match.away_team_id) {
  teamsMap.set(match.away_team_id, {
  team_id: match.away_team_id,
  team_name: match.away_team_name
  });
+ }
  }
 
  const teams = Array.from(teamsMap.values());
@@ -142,7 +146,7 @@ exports.handler = async function () {
  continue;
  }
 
- if (latestCache) {
+ if (latestCache && Array.isArray(latestCache.last_5_form) && latestCache.last_5_form.length > 0) {
  const { id, ...copyRow } = latestCache;
  rowsToCopy.push({
  ...copyRow,
@@ -219,6 +223,32 @@ exports.handler = async function () {
  const last10AllMatches = sortedMatches.slice(0, 10);
  const recentAllMatches = sortedMatches.slice(0, 5);
 
+ function mapFormResult(match) {
+ const isHome = match.homeTeam?.id === team.team_id;
+ const isAway = match.awayTeam?.id === team.team_id;
+
+ if (!isHome && !isAway) return null;
+
+ const goalsFor = isHome
+ ? match.score?.fullTime?.home
+ : match.score?.fullTime?.away;
+
+ const goalsAgainst = isHome
+ ? match.score?.fullTime?.away
+ : match.score?.fullTime?.home;
+
+ if (goalsFor == null || goalsAgainst == null) return null;
+
+ if (goalsFor > goalsAgainst) return "GY";
+ if (goalsFor === goalsAgainst) return "D";
+ return "V";
+ }
+
+ const last5Form = recentAllMatches
+ .map(mapFormResult)
+ .filter(Boolean)
+ .slice(0, 5);
+
  function mapStats(matchList, isHome) {
  return matchList.map((m) => {
  const goalsFor = isHome
@@ -291,6 +321,8 @@ exports.handler = async function () {
  team_name: team.team_name,
 
  last_5_count: Math.min(recentAllMatches.length, 5),
+ last_5_form: last5Form,
+
  home_last_10_count: homeMatches.length,
  away_last_10_count: awayMatches.length,
 

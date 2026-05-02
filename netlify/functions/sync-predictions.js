@@ -50,6 +50,10 @@ exports.handler = async function () {
  return (value * (1 - strength)) + (mean * strength);
  }
 
+ function safeFormArray(value) {
+ return Array.isArray(value) ? value.slice(0, 5) : [];
+ }
+
  function estimateCorners(expectedHomeGoals, expectedAwayGoals) {
  const totalExpectedGoals = expectedHomeGoals + expectedAwayGoals;
  const safeTotal = totalExpectedGoals <= 0 ? 0.1 : totalExpectedGoals;
@@ -91,15 +95,13 @@ exports.handler = async function () {
  if (settingsError) throw settingsError;
  if (!settingsRow) throw new Error("Nincs aktív model_settings sor.");
 
-function predictMatch(match, homeForm, awayForm, settings) {
-
+ function predictMatch(match, homeForm, awayForm, settings) {
  const homeAttackRaw = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
  const homeDefenseRaw = Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
 
  const awayAttackRaw = Number(awayForm.avg_goals_for_away ?? awayForm.avg_goals_for ?? 1.0);
  const awayDefenseRaw = Number(awayForm.avg_goals_against_away ?? awayForm.avg_goals_against ?? 1.0);
 
- // LAST10 FORM
  const homeLast10Attack = Number(homeForm.last10_avg_goals_for ?? 1.3);
  const awayLast10Attack = Number(awayForm.last10_avg_goals_for ?? 1.2);
 
@@ -118,11 +120,9 @@ function predictMatch(match, homeForm, awayForm, settings) {
  const homeLeagueStrength = Number(homeForm.source_league_strength ?? 0.90);
  const awayLeagueStrength = Number(awayForm.source_league_strength ?? 0.90);
 
- // ÚJ: Dinamikus beállítások beolvasása az adatbázisból (vagy alapértelmezett érték)
  const meanRegression = Number(settings.mean_regression_strength || 0.35);
  const formBoost = Number(settings.form_boost_weight || 0.35);
 
- // Itt már a dinamikus meanRegression-t használjuk
  const homeAttack = regressTowardMean(homeAttackRaw, 1.70, meanRegression) * homeLeagueStrength;
  const awayAttack = regressTowardMean(awayAttackRaw, 1.45, meanRegression) * awayLeagueStrength;
 
@@ -146,20 +146,17 @@ function predictMatch(match, homeForm, awayForm, settings) {
  (homeStrengthBoost * 0.08) -
  (leagueBalanceBoost * 0.12);
 
- // FORM BOOST - Itt már a dinamikus formBoost változót használjuk
  expectedHomeGoals += (homeLast10Attack - 1.3) * formBoost;
  expectedAwayGoals += (awayLast10Attack - 1.2) * formBoost;
 
  expectedHomeGoals += (awayLast10Defense - 1.2) * 0.25;
  expectedAwayGoals += (homeLast10Defense - 1.2) * 0.25;
 
- // OVER TREND BOOST
  if ((homeOverTrend + awayOverTrend) / 2 > 65) {
  expectedHomeGoals += 0.2;
  expectedAwayGoals += 0.2;
  }
 
- // BTTS TREND BOOST
  if ((homeBttsTrend + awayBttsTrend) / 2 > 60) {
  expectedHomeGoals += 0.15;
  expectedAwayGoals += 0.15;
@@ -210,7 +207,7 @@ function predictMatch(match, homeForm, awayForm, settings) {
 
  let adjusted = probability;
 
- if (h === a) adjusted *= 0.93; // draw nerf
+ if (h === a) adjusted *= 0.93;
 
  if (adjusted > bestProbability) {
  bestProbability = adjusted;
@@ -249,6 +246,9 @@ function predictMatch(match, homeForm, awayForm, settings) {
  if (homeWin > draw && homeWin > awayWin) predicted1x2Pick = "HOME";
  else if (awayWin > homeWin && awayWin > draw) predicted1x2Pick = "AWAY";
 
+ const corners = estimateCorners(expectedHomeGoals, expectedAwayGoals);
+ const cards = estimateCards(expectedHomeGoals, expectedAwayGoals);
+
  return {
  predicted_score: bestScore,
  predicted_home_goals: Number(expectedHomeGoals.toFixed(2)),
@@ -260,10 +260,16 @@ function predictMatch(match, homeForm, awayForm, settings) {
  predicted_draw_probability: Number((draw * 100).toFixed(2)),
  predicted_away_win_probability: Number((awayWin * 100).toFixed(2)),
  predicted_1x2_pick: predicted1x2Pick,
+ predicted_corners_total: corners.total,
+ predicted_cards_total: cards.total,
  final_over25_tip: finalOver25Tip,
- final_btts_tip: finalBttsTip
+ final_btts_tip: finalBttsTip,
+ used_home_advantage: homeAdvantage,
+ used_over25_threshold: 60,
+ used_btts_threshold: 60,
+ explanation: ""
  };
-}
+ }
 
  function getActual1x2Result(match) {
  const homeGoals = match.full_time_home;
@@ -375,25 +381,23 @@ function predictMatch(match, homeForm, awayForm, settings) {
  }
  }
 
-const deduped = [];
+ const deduped = [];
  const seen = new Set();
 
  for (const pick of picks.sort((a, b) => b.pick_value - a.pick_value)) {
-   const key = `${pick.match_id}_${pick.pick_type}`;
-   if (seen.has(key)) continue;
-   seen.add(key);
-   deduped.push(pick);
+ const key = `${pick.match_id}_${pick.pick_type}`;
+ if (seen.has(key)) continue;
+ seen.add(key);
+ deduped.push(pick);
  }
 
- // --- EZ A SOR HIÁNYZOTT: Itt hozzuk létre a finalPicks változót! ---
  const finalPicks = deduped.slice(0, 5);
 
- // --- JAVÍTOTT RETURN SZINTAXIS ---
  if (finalPicks.length < 2) {
-   return {
-     created: false,
-     reason: "Nincs elég erős tipp a mai napra"
-   };
+ return {
+ created: false,
+ reason: "Nincs elég erős tipp a mai napra"
+ };
  }
 
  const { data: ticketInsert, error: ticketInsertError } = await supabase
@@ -563,6 +567,9 @@ const deduped = [];
 
  if (!homeForm || !awayForm) continue;
 
+ const homeLast5Form = safeFormArray(homeForm.last_5_form);
+ const awayLast5Form = safeFormArray(awayForm.last_5_form);
+
  const existingPrediction = existingPredictionMap.get(match.match_id);
 
  const statusUpper = (match.status || "").toUpperCase();
@@ -614,6 +621,8 @@ const deduped = [];
  live_home: match.live_home ?? null,
  live_away: match.live_away ?? null,
  minute: match.minute ?? null,
+ home_form: homeLast5Form,
+ away_form: awayLast5Form,
  actual_home_goals: isFinished ? match.full_time_home : null,
  actual_away_goals: isFinished ? match.full_time_away : null,
  winner_hit:
@@ -639,6 +648,9 @@ const deduped = [];
  home_team_crest: match.home_team_crest || null,
  away_team_crest: match.away_team_crest || null,
 
+ home_form: homeLast5Form,
+ away_form: awayLast5Form,
+
  live_home: match.live_home ?? null,
  live_away: match.live_away ?? null,
  minute: match.minute ?? null,
@@ -654,8 +666,8 @@ const deduped = [];
  predicted_1x2_pick: prediction.predicted_1x2_pick,
  predicted_corners_total: prediction.predicted_corners_total,
  predicted_cards_total: prediction.predicted_cards_total,
- final_over25_tip: prediction.final_over25Tip || prediction.final_over25_tip,
- final_btts_tip: prediction.finalBttsTip || prediction.final_btts_tip,
+ final_over25_tip: prediction.final_over25_tip,
+ final_btts_tip: prediction.final_btts_tip,
  used_home_advantage: prediction.used_home_advantage,
  used_over25_threshold: prediction.used_over25_threshold,
  used_btts_threshold: prediction.used_btts_threshold,
@@ -756,6 +768,8 @@ const deduped = [];
  live_home: row.live_home,
  live_away: row.live_away,
  minute: row.minute,
+ home_form: row.home_form,
+ away_form: row.away_form,
  actual_home_goals: row.actual_home_goals,
  actual_away_goals: row.actual_away_goals,
  exact_hit,
@@ -783,6 +797,9 @@ const deduped = [];
  away_team_name: row.away_team_name,
  home_team_crest: row.home_team_crest,
  away_team_crest: row.away_team_crest,
+
+ home_form: row.home_form,
+ away_form: row.away_form,
 
  live_home: row.live_home,
  live_away: row.live_away,
