@@ -2,27 +2,27 @@ import { createClient } from "@supabase/supabase-js";
 
 function getBudapestTimeParts() {
  const parts = new Intl.DateTimeFormat("en-GB", {
- timeZone: "Europe/Budapest",
- hour: "2-digit",
- minute: "2-digit",
- hour12: false
+  timeZone: "Europe/Budapest",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false
  }).formatToParts(new Date());
 
  const map = {};
  for (const part of parts) {
- map[part.type] = part.value;
+  map[part.type] = part.value;
  }
 
  return {
- hour: Number(map.hour || 0),
- minute: Number(map.minute || 0)
+  hour: Number(map.hour || 0),
+  minute: Number(map.minute || 0)
  };
 }
 
 function getTodayUtcDate() {
  const now = new Date();
  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(
- now.getUTCDate()
+  now.getUTCDate()
  ).padStart(2, "0")}`;
 }
 
@@ -32,39 +32,39 @@ export default async () => {
  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
  if (!baseUrl) {
- throw new Error("Hiányzik a URL vagy DEPLOY_PRIME_URL env.");
+  throw new Error("Hiányzik a URL vagy DEPLOY_PRIME_URL env.");
  }
 
  if (!supabaseUrl || !supabaseKey) {
- throw new Error("Hiányzik a SUPABASE_URL vagy SUPABASE_SERVICE_ROLE_KEY env.");
+  throw new Error("Hiányzik a SUPABASE_URL vagy SUPABASE_SERVICE_ROLE_KEY env.");
  }
 
  const supabase = createClient(supabaseUrl, supabaseKey);
 
  async function callFunction(name) {
- const url = `${baseUrl}/.netlify/functions/${name}`;
+  const url = `${baseUrl}/.netlify/functions/${name}`;
 
- try {
- const response = await fetch(url);
- const text = await response.text();
+  try {
+   const response = await fetch(url);
+   const text = await response.text();
 
- let json;
- try {
- json = JSON.parse(text);
- } catch {
- json = text;
- }
+   let json;
+   try {
+    json = JSON.parse(text);
+   } catch {
+    json = text;
+   }
 
- if (!response.ok) {
- throw new Error(`${name} hiba: ${text}`);
- }
+   if (!response.ok) {
+    throw new Error(`${name} hiba: ${text}`);
+   }
 
- console.log(` ${name} OK`);
- return json;
- } catch (err) {
- console.error(` ${name} FAIL`, err.message);
- return null;
- }
+   console.log(`${name} OK`);
+   return json;
+  } catch (err) {
+   console.error(`${name} FAIL`, err.message);
+   return null;
+  }
  }
 
  const { hour, minute } = getBudapestTimeParts();
@@ -74,70 +74,79 @@ export default async () => {
  const endOfDay = `${todayUtc}T23:59:59.999Z`;
 
  const { data: todayMatches, error: todayMatchesError } = await supabase
- .from("matches")
- .select("status, match_date")
- .gte("match_date", startOfDay)
- .lte("match_date", endOfDay);
+  .from("matches")
+  .select("status, match_date")
+  .gte("match_date", startOfDay)
+  .lte("match_date", endOfDay);
 
  if (todayMatchesError) {
- throw todayMatchesError;
+  throw todayMatchesError;
  }
 
  const rows = todayMatches || [];
 
  const hasLive = rows.some((x) =>
- ["LIVE", "IN_PLAY", "PAUSED"].includes((x.status || "").toUpperCase())
+  ["LIVE", "IN_PLAY", "PAUSED"].includes((x.status || "").toUpperCase())
  );
 
  const hasUpcoming = rows.some((x) =>
- ["TIMED", "SCHEDULED"].includes((x.status || "").toUpperCase())
+  ["TIMED", "SCHEDULED"].includes((x.status || "").toUpperCase())
  );
 
  const hasFinished = rows.some((x) =>
- ["FINISHED"].includes((x.status || "").toUpperCase())
+  ["FINISHED"].includes((x.status || "").toUpperCase())
  );
 
  const isBeforeMidnightWindow = hour === 23 && minute >= 45;
  const isAfterMidnightWindow = hour === 0 && minute <= 20;
  const isEarlyMorningWindow = hour >= 5 && hour <= 6;
- const isDaytimeFootballWindow = hour >= 10 && hour <= 23;
 
  const shouldRefreshListWindow =
- isBeforeMidnightWindow ||
- isAfterMidnightWindow ||
- isEarlyMorningWindow;
+  isBeforeMidnightWindow ||
+  isAfterMidnightWindow ||
+  isEarlyMorningWindow;
+
+ /*
+  Sync logika:
+  - Ha van élő meccs: sync-matches + sync-predictions percenként.
+  - Ha nincs adat: sync-matches azonnal.
+  - Közelgő meccseknél: sync-matches és sync-predictions 5 percenként.
+  - Csapatforma: 15 percenként, csak ha nincs élő meccs.
+  - Befejezett meccseknél: 10 percenként frissítjük a találati statokat.
+ */
 
  const shouldSyncMatches =
- isDaytimeFootballWindow ||
- shouldRefreshListWindow ||
- rows.length === 0;
+  hasLive ||
+  rows.length === 0 ||
+  shouldRefreshListWindow ||
+  (hasUpcoming && minute % 5 === 0) ||
+  (hasFinished && minute % 10 === 0);
 
  const shouldSyncTeamForm =
- !hasLive &&
- hasUpcoming &&
- minute % 10 === 0;
+  !hasLive &&
+  hasUpcoming &&
+  minute % 15 === 0;
 
  const shouldSyncPredictions =
- shouldSyncMatches ||
- shouldSyncTeamForm ||
- hasLive ||
- hasUpcoming;
+  hasLive ||
+  shouldSyncTeamForm ||
+  (hasUpcoming && minute % 5 === 0) ||
+  (hasFinished && minute % 10 === 0);
 
- console.log(" daily-sync indul", {
- budapestHour: hour,
- budapestMinute: minute,
- hasLive,
- hasUpcoming,
- hasFinished,
- todayCount: rows.length,
- isBeforeMidnightWindow,
- isAfterMidnightWindow,
- isEarlyMorningWindow,
- isDaytimeFootballWindow,
- shouldRefreshListWindow,
- shouldSyncMatches,
- shouldSyncTeamForm,
- shouldSyncPredictions
+ console.log("daily-sync indul", {
+  budapestHour: hour,
+  budapestMinute: minute,
+  hasLive,
+  hasUpcoming,
+  hasFinished,
+  todayCount: rows.length,
+  isBeforeMidnightWindow,
+  isAfterMidnightWindow,
+  isEarlyMorningWindow,
+  shouldRefreshListWindow,
+  shouldSyncMatches,
+  shouldSyncTeamForm,
+  shouldSyncPredictions
  });
 
  let matches = null;
@@ -146,43 +155,54 @@ export default async () => {
  let training = null;
 
  if (shouldSyncMatches) {
- matches = await callFunction("sync-matches");
+  matches = await callFunction("sync-matches");
  }
 
  if (shouldSyncTeamForm) {
- teamForm = await callFunction("sync-team-form");
+  teamForm = await callFunction("sync-team-form");
  }
 
  if (shouldSyncPredictions) {
- predictions = await callFunction("sync-predictions");
+  predictions = await callFunction("sync-predictions");
  }
 
- // napi egyszer automata tanulás, budapesti idő szerint 04:05-kor
+ // Napi egyszer automata tanulás, budapesti idő szerint 04:05-kor
  if (hour === 4 && minute === 5) {
- training = await callFunction("train-model");
+  training = await callFunction("train-model");
  }
 
- console.log(" daily-sync kész", {
- matches,
- teamForm,
- predictions,
- training
+ console.log("daily-sync kész", {
+  matches,
+  teamForm,
+  predictions,
+  training
  });
 
  return new Response(
- JSON.stringify({
- ok: true,
- matches,
- teamForm,
- predictions,
- training
- }),
- {
- status: 200,
- headers: {
- "content-type": "application/json"
- }
- }
+  JSON.stringify({
+   ok: true,
+   matches,
+   teamForm,
+   predictions,
+   training,
+   decision: {
+    budapestHour: hour,
+    budapestMinute: minute,
+    hasLive,
+    hasUpcoming,
+    hasFinished,
+    todayCount: rows.length,
+    shouldSyncMatches,
+    shouldSyncTeamForm,
+    shouldSyncPredictions
+   }
+  }),
+  {
+   status: 200,
+   headers: {
+    "content-type": "application/json"
+   }
+  }
  );
 };
 

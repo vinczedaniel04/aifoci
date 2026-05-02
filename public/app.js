@@ -744,21 +744,33 @@ async function loadPredictions(forceRefresh = false, silent = false) {
  }
 }
 
-async function runBackgroundSync(silent = true) {
- try {
-  await fetch("/.netlify/functions/sync-matches");
-  await fetch("/.netlify/functions/sync-team-form");
-  await fetch("/.netlify/functions/sync-predictions");
-  await loadPredictions(true, silent);
- } catch (error) {
-  console.error("Sync error:", error);
+function hasLiveMatchInPayload(payload) {
+ const items = payload?.predictions || [];
+
+ return items.some((item) =>
+  ["LIVE", "IN_PLAY", "PAUSED"].includes((item.status || "").toUpperCase())
+ );
+}
+
+let frontendRefreshTimer = null;
+
+async function refreshFrontendData(silent = true) {
+ const data = await loadPredictions(true, silent);
+
+ const hasLive = hasLiveMatchInPayload(data);
+ const nextRefreshMs = hasLive ? 30000 : 300000;
+
+ if (frontendRefreshTimer) {
+  clearTimeout(frontendRefreshTimer);
  }
+
+ frontendRefreshTimer = setTimeout(() => {
+  refreshFrontendData(true);
+ }, nextRefreshMs);
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
- await loadPredictions(true, false);
-
- runBackgroundSync(true);
+ const firstData = await loadPredictions(true, false);
 
  document.getElementById("ticketToggle")?.addEventListener("click", () => {
   const el = document.getElementById("ai-ticket");
@@ -773,7 +785,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
  });
 
- setInterval(async () => {
-  await runBackgroundSync(true);
- }, 60000);
+ const hasLive = hasLiveMatchInPayload(firstData);
+ frontendRefreshTimer = setTimeout(() => {
+  refreshFrontendData(true);
+ }, hasLive ? 30000 : 300000);
 });
