@@ -36,7 +36,7 @@ function renderDailyTickets(dailyTickets) {
  return dailyTickets
   .map((ticket, index) => {
    const dayId = safeDomId("day-ticket", ticket.id || index);
-   const isOpen = index === 0;
+   const isOpen = index === false;
 
    const picksHtml = (ticket.picks || [])
     .map(
@@ -89,7 +89,7 @@ function renderDailyPredictions(dailyPredictions) {
  return dailyPredictions
   .map((day, index) => {
    const dayId = safeDomId("day-prediction", day.day || index);
-   const isOpen = index === 0;
+   const isOpen = index === false;
 
    const matchesHtml = (day.matches || [])
     .map(
@@ -146,7 +146,7 @@ function renderDailyPredictions(dailyPredictions) {
 function renderMonthBlock(monthData, index) {
  const prediction = monthData.prediction_stats || {};
  const ticket = monthData.ticket_stats || {};
- const isOpen = index === 0;
+ const isOpen = index === false;
 
  return `
  <section class="card month-accordion">
