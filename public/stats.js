@@ -28,7 +28,10 @@ function renderDailyTickets(dailyTickets) {
  }
 
  return dailyTickets
-  .map((ticket) => {
+  .map((ticket, index) => {
+   const dayId = `day-ticket-${String(ticket.id || index).replace(/[^a-zA-Z0-9_-]/g, "")}`;
+   const isOpen = index === 0;
+
    const picksHtml = (ticket.picks || [])
     .map(
      (pick) => `
@@ -44,21 +47,27 @@ function renderDailyTickets(dailyTickets) {
     .join("");
 
    return `
-   <div class="monthly-ticket">
-    <div class="monthly-ticket-header">
+   <div class="monthly-ticket day-accordion">
+    <button class="day-accordion-header" type="button" data-day-target="${dayId}">
      <div>
       <strong>${ticket.ticket_day}</strong>
       <small>${ticket.hits}/${ticket.total_picks} találat • ${pctText(ticket.hit_rate)}</small>
      </div>
-     ${
-      ticket.is_full_hit
-       ? `<span class="ticket-pick-strength">FULL HIT</span>`
-       : `<span class="ticket-pick-strength">${ticket.hits}/${ticket.total_picks}</span>`
-     }
-    </div>
 
-    <div class="monthly-picks">
-     ${picksHtml}
+     <div class="day-header-right">
+      ${
+       ticket.is_full_hit
+        ? `<span class="ticket-pick-strength">FULL HIT</span>`
+        : `<span class="ticket-pick-strength">${ticket.hits}/${ticket.total_picks}</span>`
+      }
+      <span class="arrow small ${isOpen ? "open" : ""}"></span>
+     </div>
+    </button>
+
+    <div class="day-accordion-body ${isOpen ? "open" : ""}" id="${dayId}">
+     <div class="monthly-picks">
+      ${picksHtml || `<div class="ticket-empty">Ehhez a naphoz nincs pick.</div>`}
+     </div>
     </div>
    </div>
   `;
@@ -179,11 +188,32 @@ function wireMonthAccordions() {
  blocks.forEach((block) => {
   const header = block.querySelector(".month-accordion-header");
   const body = block.querySelector(".month-accordion-body");
-  const arrow = block.querySelector(".arrow");
+  const arrow = block.querySelector(".month-accordion-header .arrow");
 
   header.addEventListener("click", () => {
    const nowOpen = body.classList.toggle("open");
    if (arrow) arrow.classList.toggle("open", nowOpen);
+  });
+ });
+}
+
+function wireDayAccordions() {
+ const buttons = document.querySelectorAll("[data-day-target]");
+
+ buttons.forEach((button) => {
+  button.addEventListener("click", (event) => {
+   event.stopPropagation();
+
+   const targetId = button.getAttribute("data-day-target");
+   const target = document.getElementById(targetId);
+   if (!target) return;
+
+   const nowOpen = target.classList.toggle("open");
+
+   const arrow = button.querySelector(".arrow");
+   if (arrow) {
+    arrow.classList.toggle("open", nowOpen);
+   }
   });
  });
 }
@@ -198,6 +228,7 @@ function renderStats(data) {
 
  statsEl.innerHTML = months.map(renderMonthBlock).join("");
  wireMonthAccordions();
+ wireDayAccordions();
 }
 
 async function loadMonthlyStats() {
