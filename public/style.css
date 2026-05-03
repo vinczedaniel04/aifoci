@@ -1146,6 +1146,64 @@ button:hover {
   border: 1px solid rgba(148, 163, 184, 0.32);
   color: #cbd5e1;
 }
+/* ===== TOP NAV FIX ===== */
+
+.brand-header .top-nav {
+  margin-top: 18px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 999px;
+  background: rgba(5, 17, 39, 0.72);
+  border: 1px solid rgba(146, 177, 230, 0.18);
+}
+
+.brand-header .top-nav-link,
+.brand-header .top-nav-link:visited {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  color: #dbeafe !important;
+  text-decoration: none !important;
+  font-size: 14px;
+  font-weight: 900;
+  transition: all 0.2s ease;
+}
+
+.brand-header .top-nav-link:hover {
+  background: rgba(79, 141, 253, 0.16);
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+
+.brand-header .top-nav-link.active {
+  background: linear-gradient(135deg, rgba(79, 141, 253, 0.95), rgba(123, 134, 255, 0.9));
+  color: white !important;
+  box-shadow: 0 0 14px rgba(79, 141, 253, 0.28);
+}
+
+/* Főoldali összesített AI stat elrejtése */
+.home-ai-stats-hidden {
+  display: none !important;
+}
+
+@media (max-width: 800px) {
+  .brand-header .top-nav {
+    width: 100%;
+    display: flex;
+  }
+
+  .brand-header .top-nav-link {
+    flex: 1;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+}
 
 @media (max-width: 800px) {
   .month-accordion-header,
