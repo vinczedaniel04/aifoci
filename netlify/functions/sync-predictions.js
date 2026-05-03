@@ -24,7 +24,16 @@ exports.handler = async function () {
  ).padStart(2, "0")}`;
  }
 
- const matchDay = getTodayUtcDate();
+ function getSeasonStartYearUtc() {
+ const now = new Date();
+ const year = now.getUTCFullYear();
+ const month = now.getUTCMonth() + 1;
+
+ return month >= 7 ? year : year - 1;
+}
+
+const matchDay = getTodayUtcDate();
+const season = getSeasonStartYearUtc();
 
  function factorial(n) {
  if (n <= 1) return 1;
@@ -533,10 +542,10 @@ exports.handler = async function () {
 
  if (matchesError) throw matchesError;
 
- const { data: formRows, error: formError } = await supabase
+const { data: formRows, error: formError } = await supabase
  .from("team_form_cache")
  .select("*")
- .eq("match_day", matchDay);
+ .eq("season", season);
 
  if (formError) throw formError;
 

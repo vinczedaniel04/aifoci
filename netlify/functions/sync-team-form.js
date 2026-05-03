@@ -180,7 +180,7 @@ exports.handler = async function () {
   if (rowsToCopy.length > 0) {
    const { error: copyError } = await supabase
     .from("team_form_cache")
-    .upsert(rowsToCopy, { onConflict: "match_day,team_id" });
+    .upsert(rowsToCopy, { onConflict: "season,team_id" });
 
    if (copyError) throw copyError;
   }
@@ -404,7 +404,7 @@ exports.handler = async function () {
   if (fetchedRows.length > 0) {
    const { error: upsertError } = await supabase
     .from("team_form_cache")
-    .upsert(fetchedRows, { onConflict: "match_day,team_id" });
+    .upsert(fetchedRows, { onConflict: "season,team_id" });
 
    if (upsertError) throw upsertError;
   }
