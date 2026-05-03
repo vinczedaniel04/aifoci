@@ -68,6 +68,63 @@ exports.handler = async function () {
    return months.reverse();
   }
 
+  function buildDailyPredictions(predictions) {
+   const grouped = {};
+
+   for (const row of predictions) {
+    const day = String(row.match_date || "").slice(0, 10);
+
+    if (!grouped[day]) {
+     grouped[day] = {
+      day,
+      total: 0,
+      exact_hits: 0,
+      winner_hits: 0,
+      over25_hits: 0,
+      btts_hits: 0,
+      exact_rate: 0,
+      winner_rate: 0,
+      over25_rate: 0,
+      btts_rate: 0,
+      matches: []
+     };
+    }
+
+    grouped[day].total += 1;
+
+    if (row.exact_hit === true) grouped[day].exact_hits += 1;
+    if (row.winner_hit === true) grouped[day].winner_hits += 1;
+    if (row.over25_hit === true) grouped[day].over25_hits += 1;
+    if (row.btts_hit === true) grouped[day].btts_hits += 1;
+
+    grouped[day].matches.push({
+     match_date: row.match_date,
+     competition_code: row.competition_code,
+     home_team_name: row.home_team_name,
+     away_team_name: row.away_team_name,
+     predicted_score: row.predicted_score,
+     actual_score: `${row.actual_home_goals ?? 0}-${row.actual_away_goals ?? 0}`,
+     exact_hit: row.exact_hit,
+     winner_hit: row.winner_hit,
+     over25_hit: row.over25_hit,
+     btts_hit: row.btts_hit
+    });
+   }
+
+   return Object.values(grouped)
+    .map((day) => ({
+     ...day,
+     exact_rate: pct(day.exact_hits, day.total),
+     winner_rate: pct(day.winner_hits, day.total),
+     over25_rate: pct(day.over25_hits, day.total),
+     btts_rate: pct(day.btts_hits, day.total),
+     matches: day.matches.sort((a, b) =>
+      String(a.match_date).localeCompare(String(b.match_date))
+     )
+    }))
+    .sort((a, b) => String(b.day).localeCompare(String(a.day)));
+  }
+
   const endIso = getEndIsoForNextMonth();
 
   const { data: firstPredictionRows, error: firstPredictionError } = await supabase
@@ -130,7 +187,7 @@ exports.handler = async function () {
     ticket_rows: [],
     pick_rows: [],
     daily_tickets: [],
-    recent_predictions: []
+    daily_predictions: []
    });
   }
 
@@ -272,18 +329,7 @@ exports.handler = async function () {
     daily_tickets: monthData.daily_tickets.sort((a, b) =>
      String(b.ticket_day).localeCompare(String(a.ticket_day))
     ),
-    recent_predictions: predictions.slice(0, 30).map((row) => ({
-     match_date: row.match_date,
-     competition_code: row.competition_code,
-     home_team_name: row.home_team_name,
-     away_team_name: row.away_team_name,
-     predicted_score: row.predicted_score,
-     actual_score: `${row.actual_home_goals ?? 0}-${row.actual_away_goals ?? 0}`,
-     exact_hit: row.exact_hit,
-     winner_hit: row.winner_hit,
-     over25_hit: row.over25_hit,
-     btts_hit: row.btts_hit
-    }))
+    daily_predictions: buildDailyPredictions(predictions)
    };
   });
 

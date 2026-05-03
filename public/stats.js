@@ -22,6 +22,12 @@ function renderStatBox(label, value, small = "") {
  `;
 }
 
+function safeDomId(prefix, value) {
+ return `${prefix}-${String(value || "")
+  .replace(/[^a-zA-Z0-9_-]/g, "")
+  .slice(0, 80)}`;
+}
+
 function renderDailyTickets(dailyTickets) {
  if (!dailyTickets.length) {
   return `<div class="ticket-empty">Ebben a hónapban még nincs AI szelvény.</div>`;
@@ -29,7 +35,7 @@ function renderDailyTickets(dailyTickets) {
 
  return dailyTickets
   .map((ticket, index) => {
-   const dayId = `day-ticket-${String(ticket.id || index).replace(/[^a-zA-Z0-9_-]/g, "")}`;
+   const dayId = safeDomId("day-ticket", ticket.id || index);
    const isOpen = index === 0;
 
    const picksHtml = (ticket.picks || [])
@@ -75,29 +81,65 @@ function renderDailyTickets(dailyTickets) {
   .join("");
 }
 
-function renderRecentPredictions(recentPredictions) {
- if (!recentPredictions.length) {
+function renderDailyPredictions(dailyPredictions) {
+ if (!dailyPredictions.length) {
   return `<div class="ticket-empty">Ebben a hónapban még nincs lezárt predikció.</div>`;
  }
 
- return recentPredictions
-  .map(
-   (match) => `
-   <div class="monthly-match-row">
-    <div class="monthly-match-main">
-     <strong>${match.home_team_name} - ${match.away_team_name}</strong>
-     <small>
-      Tipp: ${match.predicted_score || "-"} • Eredmény: ${match.actual_score || "-"}
-     </small>
-    </div>
-    <div class="monthly-hit-group">
-     <span class="mini-hit-label">1X2</span>${hitIcon(match.winner_hit)}
-     <span class="mini-hit-label">O2.5</span>${hitIcon(match.over25_hit)}
-     <span class="mini-hit-label">BTTS</span>${hitIcon(match.btts_hit)}
+ return dailyPredictions
+  .map((day, index) => {
+   const dayId = safeDomId("day-prediction", day.day || index);
+   const isOpen = index === 0;
+
+   const matchesHtml = (day.matches || [])
+    .map(
+     (match) => `
+     <div class="monthly-match-row">
+      <div class="monthly-match-main">
+       <strong>${match.home_team_name} - ${match.away_team_name}</strong>
+       <small>
+        Tipp: ${match.predicted_score || "-"} • Eredmény: ${match.actual_score || "-"}
+       </small>
+      </div>
+      <div class="monthly-hit-group">
+       <span class="mini-hit-label">Pontos</span>${hitIcon(match.exact_hit)}
+       <span class="mini-hit-label">1X2</span>${hitIcon(match.winner_hit)}
+       <span class="mini-hit-label">O2.5</span>${hitIcon(match.over25_hit)}
+       <span class="mini-hit-label">BTTS</span>${hitIcon(match.btts_hit)}
+      </div>
+     </div>
+    `
+    )
+    .join("");
+
+   return `
+   <div class="monthly-ticket day-accordion">
+    <button class="day-accordion-header" type="button" data-day-target="${dayId}">
+     <div>
+      <strong>${day.day}</strong>
+      <small>
+       ${day.total || 0} meccs •
+       Pontos ${day.exact_hits || 0}/${day.total || 0} •
+       1X2 ${day.winner_hits || 0}/${day.total || 0} •
+       O2.5 ${day.over25_hits || 0}/${day.total || 0} •
+       BTTS ${day.btts_hits || 0}/${day.total || 0}
+      </small>
+     </div>
+
+     <div class="day-header-right">
+      <span class="top-stat-badge">${pctText(day.winner_rate)} 1X2</span>
+      <span class="arrow small ${isOpen ? "open" : ""}"></span>
+     </div>
+    </button>
+
+    <div class="day-accordion-body ${isOpen ? "open" : ""}" id="${dayId}">
+     <div class="monthly-picks">
+      ${matchesHtml || `<div class="ticket-empty">Ehhez a naphoz nincs lezárt meccs.</div>`}
+     </div>
     </div>
    </div>
-  `
-  )
+  `;
+  })
   .join("");
 }
 
@@ -170,12 +212,12 @@ function renderMonthBlock(monthData, index) {
    <section class="stats-inner-section">
     <div class="stats-section-header">
      <div>
-      <div class="top-stat-kicker">Legutóbbi lezárt meccsek</div>
-      <div class="top-stat-title">Predikció találatok</div>
+      <div class="top-stat-kicker">Napi predikciók</div>
+      <div class="top-stat-title">Predikció találatok napi bontásban</div>
      </div>
     </div>
 
-    ${renderRecentPredictions(monthData.recent_predictions || [])}
+    ${renderDailyPredictions(monthData.daily_predictions || [])}
    </section>
   </div>
  </section>
