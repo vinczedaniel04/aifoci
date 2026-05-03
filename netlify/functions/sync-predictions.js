@@ -484,96 +484,100 @@ function predictMatch(match, homeForm, awayForm, settings) {
  }
 
  async function refreshAiTicketResults() {
+ const { data: todayTicket, error: todayTicketError } = await supabase
+  .from("ai_tickets")
+  .select("*")
+  .eq("ticket_day", matchDay)
+  .maybeSingle();
+
+ if (todayTicketError) throw todayTicketError;
+ if (!todayTicket) return;
+
  const { data: picks, error: picksError } = await supabase
- .from("ai_ticket_picks")
- .select("*");
+  .from("ai_ticket_picks")
+  .select("*")
+  .eq("ticket_id", todayTicket.id);
 
  if (picksError) throw picksError;
 
  for (const pick of picks || []) {
- const { data: match, error: matchError } = await supabase
- .from("matches")
- .select("*")
- .eq("match_id", pick.match_id)
- .maybeSingle();
+  const { data: match, error: matchError } = await supabase
+   .from("matches")
+   .select("*")
+   .eq("match_id", pick.match_id)
+   .maybeSingle();
 
- if (matchError) throw matchError;
- if (!match) continue;
- if ((match.status || "").toUpperCase() !== "FINISHED") continue;
+  if (matchError) throw matchError;
+  if (!match) continue;
+  if ((match.status || "").toUpperCase() !== "FINISHED") continue;
 
- const home = Number(match.full_time_home);
- const away = Number(match.full_time_away);
+  const home = Number(match.full_time_home);
+  const away = Number(match.full_time_away);
 
- if (Number.isNaN(home) || Number.isNaN(away)) continue;
+  if (Number.isNaN(home) || Number.isNaN(away)) continue;
 
- let isHit = false;
+  let isHit = false;
 
- if (pick.pick_type === "HOME_WIN") {
- isHit = home > away;
+  if (pick.pick_type === "HOME_WIN") {
+   isHit = home > away;
+  }
+
+  if (pick.pick_type === "AWAY_WIN") {
+   isHit = away > home;
+  }
+
+  if (pick.pick_type === "DRAW") {
+   isHit = home === away;
+  }
+
+  if (pick.pick_type === "OVER25") {
+   isHit = home + away >= 3;
+  }
+
+  if (pick.pick_type === "BTTS_YES") {
+   isHit = home > 0 && away > 0;
+  }
+
+  const { error: updatePickError } = await supabase
+   .from("ai_ticket_picks")
+   .update({ is_hit: isHit })
+   .eq("id", pick.id);
+
+  if (updatePickError) throw updatePickError;
  }
 
- if (pick.pick_type === "AWAY_WIN") {
- isHit = away > home;
- }
-
- if (pick.pick_type === "DRAW") {
- isHit = home === away;
- }
-
- if (pick.pick_type === "OVER25") {
- isHit = home + away >= 3;
- }
-
- if (pick.pick_type === "BTTS_YES") {
- isHit = home > 0 && away > 0;
- }
-
- const { error: updatePickError } = await supabase
- .from("ai_ticket_picks")
- .update({ is_hit: isHit })
- .eq("id", pick.id);
-
- if (updatePickError) throw updatePickError;
- }
-
- const { data: tickets, error: ticketsError } = await supabase
- .from("ai_tickets")
- .select("*");
-
- if (ticketsError) throw ticketsError;
-
- for (const ticket of tickets || []) {
  const { data: ticketPicks, error: ticketPicksError } = await supabase
- .from("ai_ticket_picks")
- .select("*")
- .eq("ticket_id", ticket.id);
+  .from("ai_ticket_picks")
+  .select("*")
+  .eq("ticket_id", todayTicket.id);
 
  if (ticketPicksError) throw ticketPicksError;
- if (!ticketPicks || ticketPicks.length === 0) continue;
+ if (!ticketPicks || ticketPicks.length === 0) return;
 
  const hits = ticketPicks.filter((p) => p.is_hit === true).length;
  const allFinished = ticketPicks.every((p) => p.is_hit !== null);
  const isFullHit = allFinished && hits === ticketPicks.length;
 
  const { error: updateTicketError } = await supabase
- .from("ai_tickets")
- .update({
- hits,
- is_full_hit: isFullHit,
- total_picks: ticketPicks.length
- })
- .eq("id", ticket.id);
+  .from("ai_tickets")
+  .update({
+   hits,
+   is_full_hit: isFullHit,
+   total_picks: ticketPicks.length
+  })
+  .eq("id", todayTicket.id);
 
  if (updateTicketError) throw updateTicketError;
- }
- }
+}
 
- const { data: matches, error: matchesError } = await supabase
+const { data: matches, error: matchesError } = await supabase
  .from("matches")
  .select("*")
+ .gte("match_date", `${matchDay}T00:00:00`)
+ .lte("match_date", `${matchDay}T23:59:59`)
  .order("match_date", { ascending: true });
 
- if (matchesError) throw matchesError;
+if (matchesError) throw matchesError;
 
 const { data: formRows, error: formError } = await supabase
  .from("team_form_cache")
@@ -582,11 +586,13 @@ const { data: formRows, error: formError } = await supabase
 
  if (formError) throw formError;
 
- const { data: existingPredictions, error: existingPredictionsError } = await supabase
+const { data: existingPredictions, error: existingPredictionsError } = await supabase
  .from("predictions_history")
- .select("*");
+ .select("*")
+ .gte("match_date", `${matchDay}T00:00:00`)
+ .lte("match_date", `${matchDay}T23:59:59`);
 
- if (existingPredictionsError) throw existingPredictionsError;
+if (existingPredictionsError) throw existingPredictionsError;
 
  const existingPredictionMap = new Map();
  for (const row of existingPredictions || []) {
