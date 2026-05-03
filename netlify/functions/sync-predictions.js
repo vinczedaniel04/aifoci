@@ -103,6 +103,8 @@ const season = getSeasonStartYearUtc();
 
  if (settingsError) throw settingsError;
  if (!settingsRow) throw new Error("Nincs aktív model_settings sor.");
+
+
 function predictMatch(match, homeForm, awayForm, settings) {
  const homeAttackRaw = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
  const homeDefenseRaw = Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
@@ -130,6 +132,11 @@ function predictMatch(match, homeForm, awayForm, settings) {
 
  const meanRegression = Number(settings.mean_regression_strength || 0.35);
  const formBoost = Number(settings.form_boost_weight || 0.35);
+
+ const over25Threshold = Number(settings.over25_threshold ?? 0.6);
+ const bttsThreshold = Number(settings.btts_threshold ?? 0.6);
+ const minTotalGoalsForOver = Number(settings.min_total_goals_for_over ?? 2.6);
+ const minTeamGoalForBtts = Number(settings.min_team_goal_for_btts ?? 0.95);
 
  const homeAttack = regressTowardMean(homeAttackRaw, 1.70, meanRegression) * homeLeagueStrength;
  const awayAttack = regressTowardMean(awayAttackRaw, 1.45, meanRegression) * awayLeagueStrength;
@@ -257,12 +264,16 @@ function predictMatch(match, homeForm, awayForm, settings) {
  const totalGoals = expectedHomeGoals + expectedAwayGoals;
 
  let finalOver25Tip = "2,5 ALATT";
- if (over25 >= 0.6 && totalGoals >= 2.6) {
+ if (over25 >= over25Threshold && totalGoals >= minTotalGoalsForOver) {
   finalOver25Tip = "2,5 FELETT";
  }
 
  let finalBttsTip = "NEM";
- if (btts >= 0.6 && expectedHomeGoals >= 0.95 && expectedAwayGoals >= 0.95) {
+ if (
+  btts >= bttsThreshold &&
+  expectedHomeGoals >= minTeamGoalForBtts &&
+  expectedAwayGoals >= minTeamGoalForBtts
+ ) {
   finalBttsTip = "IGEN";
  }
 
@@ -307,8 +318,8 @@ function predictMatch(match, homeForm, awayForm, settings) {
   final_over25_tip: finalOver25Tip,
   final_btts_tip: finalBttsTip,
   used_home_advantage: homeAdvantage,
-  used_over25_threshold: 60,
-  used_btts_threshold: 60,
+  used_over25_threshold: Number((over25Threshold * 100).toFixed(2)),
+  used_btts_threshold: Number((bttsThreshold * 100).toFixed(2)),
   explanation: ""
  };
 }
