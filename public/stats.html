@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AiFociTippek - Havi statisztika</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" sizes="64x64" href="/favicon64.png"/>
+  <link rel="icon" sizes="192x192" href="/favicon192.png"/>
+  <link rel="apple-touch-icon" href="/favicon192.png"/>
+</head>
+<body>
+  <div class="container">
+    <div class="header-shell">
+      <div class="header-glow-line"></div>
+
+      <header class="brand-header">
+        <h1 class="logo-title">
+          <img src="/favicon192.png" class="logo-icon" alt="AiFociTippek logo" />
+          <span class="brand-title-text">AiFociTippek</span>
+          <img src="/favicon192.png" class="logo-icon" alt="AiFociTippek logo" />
+        </h1>
+
+        <p>Havi statisztika és AI Tippmix teljesítmény</p>
+
+        <nav class="top-nav">
+          <a href="/" class="top-nav-link">Mai meccsek</a>
+          <a href="/stats.html" class="top-nav-link active">Havi statisztika</a>
+        </nav>
+      </header>
+    </div>
+
+    <section class="card stats-filter-card">
+      <div>
+        <div class="top-stat-kicker">Havi bontás</div>
+        <div class="top-stat-title">AI statisztikák</div>
+      </div>
+
+      <button id="reloadStatsBtn" type="button">Frissítés</button>
+    </section>
+
+    <div id="stats-status" class="stats-status">Betöltés...</div>
+
+    <main id="monthly-stats"></main>
+  </div>
+
+  <script src="/stats.js"></script>
+</body>
+</html>

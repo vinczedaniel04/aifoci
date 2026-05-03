@@ -949,6 +949,227 @@ button:hover {
   border-top-width: 8px;
   margin-left: 12px;
 }
+/* ===== MONTH ACCORDION STATS ===== */
+
+.month-accordion {
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+.month-accordion-header {
+  width: 100%;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  text-align: left;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+}
+
+.month-accordion-header:hover {
+  opacity: 1;
+}
+
+.month-title {
+  font-size: 26px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1.1;
+  text-transform: capitalize;
+}
+
+.month-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.month-accordion-body {
+  display: none;
+  padding: 0 24px 24px;
+}
+
+.month-accordion-body.open {
+  display: block;
+}
+
+.stats-inner-section {
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(5, 17, 39, 0.42);
+  border: 1px solid rgba(146, 177, 230, 0.14);
+}
+
+.stats-filter-card {
+  margin-bottom: 18px;
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.stats-status {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 12px;
+  font-weight: 700;
+}
+
+.stats-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.monthly-ticket {
+  border: 1px solid rgba(146, 177, 230, 0.18);
+  border-radius: 20px;
+  background: rgba(5, 17, 39, 0.58);
+  padding: 16px;
+  margin-top: 14px;
+}
+
+.monthly-ticket-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.monthly-ticket-header strong {
+  display: block;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.monthly-ticket-header small {
+  display: block;
+  color: #9fb0c9;
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+.monthly-picks {
+  display: grid;
+  gap: 10px;
+}
+
+.monthly-pick-row,
+.monthly-match-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  margin-top: 8px;
+}
+
+.monthly-pick-main,
+.monthly-match-main {
+  min-width: 0;
+}
+
+.monthly-pick-main strong,
+.monthly-match-main strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.monthly-pick-main small,
+.monthly-match-main small {
+  display: block;
+  color: #9fb0c9;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.monthly-hit-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mini-hit-label {
+  color: #9fb0c9;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hit-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  color: white;
+}
+
+.hit-pill.hit {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  color: #86efac;
+}
+
+.hit-pill.miss {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.48);
+  color: #fca5a5;
+}
+
+.hit-pill.pending {
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  color: #cbd5e1;
+}
+
+@media (max-width: 800px) {
+  .month-accordion-header,
+  .stats-filter-card,
+  .stats-section-header,
+  .monthly-ticket-header,
+  .monthly-pick-row,
+  .monthly-match-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .month-header-right {
+    justify-content: flex-start;
+  }
+
+  .monthly-hit-group {
+    justify-content: flex-start;
+  }
+
+  .month-title {
+    font-size: 22px;
+  }
+}
 
 /* ===== RESPONSIVE ===== */
 
