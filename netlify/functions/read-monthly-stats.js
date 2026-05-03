@@ -40,20 +40,6 @@ exports.handler = async function () {
    }).format(date);
   }
 
-  function getLastMonths(count = 12) {
-   const now = new Date();
-   const months = [];
-
-   for (let i = 0; i < count; i += 1) {
-    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
-    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-
-    months.push(key);
-   }
-
-   return months;
-  }
-
   function getStartIsoForOldestMonth(monthKey) {
    const [year, month] = monthKey.split("-").map(Number);
    return new Date(Date.UTC(year, month - 1, 1, 0, 0, 0)).toISOString();
@@ -64,11 +50,75 @@ exports.handler = async function () {
    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0)).toISOString();
   }
 
-  const monthKeys = getLastMonths(12);
-  const oldestMonth = monthKeys[monthKeys.length - 1];
+  function getMonthsFromOldestToNow(oldestMonthKey) {
+   const [oldestYear, oldestMonthNumber] = oldestMonthKey.split("-").map(Number);
+   const now = new Date();
+
+   const months = [];
+   let cursor = new Date(Date.UTC(oldestYear, oldestMonthNumber - 1, 1));
+   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+   while (cursor <= end) {
+    const key = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`;
+    months.push(key);
+
+    cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
+   }
+
+   return months.reverse();
+  }
+
+  const endIso = getEndIsoForNextMonth();
+
+  const { data: firstPredictionRows, error: firstPredictionError } = await supabase
+   .from("predictions_history")
+   .select("match_date")
+   .order("match_date", { ascending: true })
+   .limit(1);
+
+  if (firstPredictionError) throw firstPredictionError;
+
+  const { data: firstTicketRows, error: firstTicketError } = await supabase
+   .from("ai_tickets")
+   .select("ticket_day")
+   .order("ticket_day", { ascending: true })
+   .limit(1);
+
+  if (firstTicketError) throw firstTicketError;
+
+  const firstPredictionDate = firstPredictionRows?.[0]?.match_date || null;
+  const firstTicketDate = firstTicketRows?.[0]?.ticket_day || null;
+
+  const possibleStartDates = [firstPredictionDate, firstTicketDate]
+   .filter(Boolean)
+   .map((value) => new Date(value))
+   .filter((date) => !Number.isNaN(date.getTime()));
+
+  if (!possibleStartDates.length) {
+   return {
+    statusCode: 200,
+    headers: {
+     "content-type": "application/json",
+     "cache-control": "no-store"
+    },
+    body: JSON.stringify({
+     ok: true,
+     months: []
+    })
+   };
+  }
+
+  const oldestDateObject = new Date(
+   Math.min(...possibleStartDates.map((date) => date.getTime()))
+  );
+
+  const oldestMonth = `${oldestDateObject.getUTCFullYear()}-${String(
+   oldestDateObject.getUTCMonth() + 1
+  ).padStart(2, "0")}`;
 
   const startIso = getStartIsoForOldestMonth(oldestMonth);
-  const endIso = getEndIsoForNextMonth();
+
+  const monthKeys = getMonthsFromOldestToNow(oldestMonth);
 
   const monthMap = new Map();
 
@@ -237,6 +287,14 @@ exports.handler = async function () {
    };
   });
 
+  const visibleMonths = months.filter((month) => {
+   return (
+    month.prediction_stats.total > 0 ||
+    month.ticket_stats.total_picks > 0 ||
+    month.ticket_stats.ticket_days > 0
+   );
+  });
+
   return {
    statusCode: 200,
    headers: {
@@ -245,7 +303,7 @@ exports.handler = async function () {
    },
    body: JSON.stringify({
     ok: true,
-    months
+    months: visibleMonths
    })
   };
  } catch (error) {
