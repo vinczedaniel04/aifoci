@@ -103,8 +103,7 @@ const season = getSeasonStartYearUtc();
 
  if (settingsError) throw settingsError;
  if (!settingsRow) throw new Error("Nincs aktív model_settings sor.");
-
- function predictMatch(match, homeForm, awayForm, settings) {
+function predictMatch(match, homeForm, awayForm, settings) {
  const homeAttackRaw = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
  const homeDefenseRaw = Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
 
@@ -143,17 +142,17 @@ const season = getSeasonStartYearUtc();
  const homeAdvantage = Number(settings.home_advantage || 0.05) * 0.7;
 
  let expectedHomeGoals =
- (homeAttack * Number(settings.home_attack_weight || 0.52)) +
- (awayDefense * Number(settings.away_defense_weight || 0.48)) +
- homeAdvantage +
- homeStrengthBoost +
- leagueBalanceBoost;
+  (homeAttack * Number(settings.home_attack_weight || 0.52)) +
+  (awayDefense * Number(settings.away_defense_weight || 0.48)) +
+  homeAdvantage +
+  homeStrengthBoost +
+  leagueBalanceBoost;
 
  let expectedAwayGoals =
- (awayAttack * Number(settings.away_attack_weight || 0.52)) +
- (homeDefense * Number(settings.home_defense_weight || 0.48)) -
- (homeStrengthBoost * 0.08) -
- (leagueBalanceBoost * 0.12);
+  (awayAttack * Number(settings.away_attack_weight || 0.52)) +
+  (homeDefense * Number(settings.home_defense_weight || 0.48)) -
+  (homeStrengthBoost * 0.08) -
+  (leagueBalanceBoost * 0.12);
 
  expectedHomeGoals += (homeLast10Attack - 1.3) * formBoost;
  expectedAwayGoals += (awayLast10Attack - 1.2) * formBoost;
@@ -162,39 +161,42 @@ const season = getSeasonStartYearUtc();
  expectedAwayGoals += (homeLast10Defense - 1.2) * 0.25;
 
  if ((homeOverTrend + awayOverTrend) / 2 > 65) {
- expectedHomeGoals += 0.2;
- expectedAwayGoals += 0.2;
+  expectedHomeGoals += 0.2;
+  expectedAwayGoals += 0.2;
  }
 
  if ((homeBttsTrend + awayBttsTrend) / 2 > 60) {
- expectedHomeGoals += 0.15;
- expectedAwayGoals += 0.15;
+  expectedHomeGoals += 0.15;
+  expectedAwayGoals += 0.15;
  }
 
  const bothStrong =
- homeLeagueStrength >= 0.93 &&
- awayLeagueStrength >= 0.93 &&
- awayAttackRaw >= 1.45 &&
- homeAttackRaw >= 1.45;
+  homeLeagueStrength >= 0.93 &&
+  awayLeagueStrength >= 0.93 &&
+  awayAttackRaw >= 1.45 &&
+  homeAttackRaw >= 1.45;
 
  if (bothStrong) {
- const diff = expectedHomeGoals - expectedAwayGoals;
- if (Math.abs(diff) > 0.18) {
- const correctedDiff = diff * 0.58;
- const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
- expectedHomeGoals = avg + correctedDiff / 2;
- expectedAwayGoals = avg - correctedDiff / 2;
- }
+  const diff = expectedHomeGoals - expectedAwayGoals;
+
+  if (Math.abs(diff) > 0.18) {
+   const correctedDiff = diff * 0.58;
+   const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
+
+   expectedHomeGoals = avg + correctedDiff / 2;
+   expectedAwayGoals = avg - correctedDiff / 2;
+  }
  }
 
  const teamGap =
- Math.abs(homeAttackRaw - awayAttackRaw) +
- Math.abs(homeDefenseRaw - awayDefenseRaw);
+  Math.abs(homeAttackRaw - awayAttackRaw) +
+  Math.abs(homeDefenseRaw - awayDefenseRaw);
 
  if (teamGap < 0.45) {
- const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
- expectedHomeGoals = (expectedHomeGoals * 0.6) + (avg * 0.4);
- expectedAwayGoals = (expectedAwayGoals * 0.6) + (avg * 0.4);
+  const avg = (expectedHomeGoals + expectedAwayGoals) / 2;
+
+  expectedHomeGoals = (expectedHomeGoals * 0.6) + (avg * 0.4);
+  expectedAwayGoals = (expectedAwayGoals * 0.6) + (avg * 0.4);
  }
 
  expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.45, 2.7);
@@ -209,46 +211,77 @@ const season = getSeasonStartYearUtc();
  let draw = 0;
  let awayWin = 0;
 
+ const scoreCandidates = [];
+
  for (let h = 0; h <= 6; h += 1) {
- for (let a = 0; a <= 6; a += 1) {
- const probability =
- poisson(expectedHomeGoals, h) * poisson(expectedAwayGoals, a);
+  for (let a = 0; a <= 6; a += 1) {
+   const probability =
+    poisson(expectedHomeGoals, h) * poisson(expectedAwayGoals, a);
 
- let adjusted = probability;
+   let adjusted = probability;
 
- if (h === a) adjusted *= 0.93;
+   if (h === a) adjusted *= 0.93;
 
- if (adjusted > bestProbability) {
- bestProbability = adjusted;
- bestScore = `${h}-${a}`;
- }
+   scoreCandidates.push({
+    home: h,
+    away: a,
+    score: `${h}-${a}`,
+    total: h + a,
+    btts: h > 0 && a > 0,
+    probability,
+    adjusted
+   });
 
- if (h + a >= 3) over25 += probability;
- if (h > 0 && a > 0) btts += probability;
+   if (adjusted > bestProbability) {
+    bestProbability = adjusted;
+    bestScore = `${h}-${a}`;
+   }
 
- if (h > a) homeWin += probability;
- else if (h === a) draw += probability;
- else awayWin += probability;
- }
+   if (h + a >= 3) over25 += probability;
+   if (h > 0 && a > 0) btts += probability;
+
+   if (h > a) homeWin += probability;
+   else if (h === a) draw += probability;
+   else awayWin += probability;
+  }
  }
 
  const probabilitySum = homeWin + draw + awayWin;
+
  if (probabilitySum > 0) {
- homeWin /= probabilitySum;
- draw /= probabilitySum;
- awayWin /= probabilitySum;
+  homeWin /= probabilitySum;
+  draw /= probabilitySum;
+  awayWin /= probabilitySum;
  }
 
  const totalGoals = expectedHomeGoals + expectedAwayGoals;
 
  let finalOver25Tip = "2,5 ALATT";
  if (over25 >= 0.6 && totalGoals >= 2.6) {
- finalOver25Tip = "2,5 FELETT";
+  finalOver25Tip = "2,5 FELETT";
  }
 
  let finalBttsTip = "NEM";
  if (btts >= 0.6 && expectedHomeGoals >= 0.95 && expectedAwayGoals >= 0.95) {
- finalBttsTip = "IGEN";
+  finalBttsTip = "IGEN";
+ }
+
+ function isScoreCompatible(candidate) {
+  if (finalOver25Tip === "2,5 FELETT" && candidate.total < 3) return false;
+  if (finalOver25Tip === "2,5 ALATT" && candidate.total >= 3) return false;
+
+  if (finalBttsTip === "IGEN" && !candidate.btts) return false;
+  if (finalBttsTip === "NEM" && candidate.btts) return false;
+
+  return true;
+ }
+
+ const compatibleScore = scoreCandidates
+  .filter(isScoreCompatible)
+  .sort((a, b) => b.adjusted - a.adjusted)[0];
+
+ if (compatibleScore) {
+  bestScore = compatibleScore.score;
  }
 
  let predicted1x2Pick = "DRAW";
@@ -259,26 +292,26 @@ const season = getSeasonStartYearUtc();
  const cards = estimateCards(expectedHomeGoals, expectedAwayGoals);
 
  return {
- predicted_score: bestScore,
- predicted_home_goals: Number(expectedHomeGoals.toFixed(2)),
- predicted_away_goals: Number(expectedAwayGoals.toFixed(2)),
- predicted_total_goals: Number(totalGoals.toFixed(2)),
- predicted_over25_probability: Number((over25 * 100).toFixed(2)),
- predicted_btts_probability: Number((btts * 100).toFixed(2)),
- predicted_home_win_probability: Number((homeWin * 100).toFixed(2)),
- predicted_draw_probability: Number((draw * 100).toFixed(2)),
- predicted_away_win_probability: Number((awayWin * 100).toFixed(2)),
- predicted_1x2_pick: predicted1x2Pick,
- predicted_corners_total: corners.total,
- predicted_cards_total: cards.total,
- final_over25_tip: finalOver25Tip,
- final_btts_tip: finalBttsTip,
- used_home_advantage: homeAdvantage,
- used_over25_threshold: 60,
- used_btts_threshold: 60,
- explanation: ""
+  predicted_score: bestScore,
+  predicted_home_goals: Number(expectedHomeGoals.toFixed(2)),
+  predicted_away_goals: Number(expectedAwayGoals.toFixed(2)),
+  predicted_total_goals: Number(totalGoals.toFixed(2)),
+  predicted_over25_probability: Number((over25 * 100).toFixed(2)),
+  predicted_btts_probability: Number((btts * 100).toFixed(2)),
+  predicted_home_win_probability: Number((homeWin * 100).toFixed(2)),
+  predicted_draw_probability: Number((draw * 100).toFixed(2)),
+  predicted_away_win_probability: Number((awayWin * 100).toFixed(2)),
+  predicted_1x2_pick: predicted1x2Pick,
+  predicted_corners_total: corners.total,
+  predicted_cards_total: cards.total,
+  final_over25_tip: finalOver25Tip,
+  final_btts_tip: finalBttsTip,
+  used_home_advantage: homeAdvantage,
+  used_over25_threshold: 60,
+  used_btts_threshold: 60,
+  explanation: ""
  };
- }
+}
 
  function getActual1x2Result(match) {
  const homeGoals = match.full_time_home;
