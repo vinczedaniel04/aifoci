@@ -178,7 +178,7 @@ function renderMonthBlock(monthData, index) {
     <div class="monthly-overview-grid">
      <div class="monthly-summary-card">
       <div class="monthly-summary-head">
-       <span>AI predikciók</span>
+       <span>AI elemzés</span>
        <strong>${prediction.total || 0}</strong>
       </div>
 
