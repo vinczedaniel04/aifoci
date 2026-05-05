@@ -146,7 +146,10 @@ function renderDailyPredictions(dailyPredictions) {
 function renderMonthBlock(monthData, index) {
  const prediction = monthData.prediction_stats || {};
  const ticket = monthData.ticket_stats || {};
- const isOpen = index === false;
+ const isOpen = false;
+
+ const ticketSectionId = safeDomId("month-tickets", monthData.month);
+ const predictionSectionId = safeDomId("month-predictions", monthData.month);
 
  return `
  <section class="card month-accordion">
@@ -164,60 +167,71 @@ function renderMonthBlock(monthData, index) {
   </button>
 
   <div class="month-accordion-body ${isOpen ? "open" : ""}">
-   <section class="stats-inner-section">
-    <div class="stats-section-header">
+   <section class="stats-inner-section monthly-overview-section">
+    <div class="stats-section-header compact">
      <div>
-      <div class="top-stat-kicker">Predikciók</div>
-      <div class="top-stat-title">Havi AI teljesítmény</div>
+      <div class="top-stat-kicker">Összegzés</div>
+      <div class="top-stat-title">Havi teljesítmény</div>
      </div>
-     <div class="top-stat-badge">${prediction.total || 0} lezárt meccs</div>
     </div>
 
-    <div class="top-stat-grid">
-     ${renderStatBox("Pontos eredmény", prediction.exact_hits || 0, pctText(prediction.exact_rate))}
-     ${renderStatBox("Helyes 1X2", prediction.winner_hits || 0, pctText(prediction.winner_rate))}
-     ${renderStatBox("Over 2.5 találat", prediction.over25_hits || 0, pctText(prediction.over25_rate))}
-     ${renderStatBox("BTTS találat", prediction.btts_hits || 0, pctText(prediction.btts_rate))}
+    <div class="monthly-overview-grid">
+     <div class="monthly-summary-card">
+      <div class="monthly-summary-head">
+       <span>AI predikciók</span>
+       <strong>${prediction.total || 0}</strong>
+      </div>
+
+      <div class="monthly-summary-list">
+       <div><span>Pontos eredmény</span><b>${prediction.exact_hits || 0} / ${prediction.total || 0}</b><em>${pctText(prediction.exact_rate)}</em></div>
+       <div><span>Helyes 1X2</span><b>${prediction.winner_hits || 0} / ${prediction.total || 0}</b><em>${pctText(prediction.winner_rate)}</em></div>
+       <div><span>Over 2.5</span><b>${prediction.over25_hits || 0} / ${prediction.total || 0}</b><em>${pctText(prediction.over25_rate)}</em></div>
+       <div><span>BTTS</span><b>${prediction.btts_hits || 0} / ${prediction.total || 0}</b><em>${pctText(prediction.btts_rate)}</em></div>
+      </div>
+     </div>
+
+     <div class="monthly-summary-card highlight">
+      <div class="monthly-summary-head">
+       <span>AI Tippmix</span>
+       <strong>${ticket.total_picks || 0}</strong>
+      </div>
+
+      <div class="monthly-summary-list">
+       <div><span>Szelvény nap</span><b>${ticket.ticket_days || 0}</b><em>nap</em></div>
+       <div><span>Eltalált pick</span><b>${ticket.hit_picks || 0} / ${ticket.settled_picks || 0}</b><em>${pctText(ticket.pick_hit_rate)}</em></div>
+       <div><span>Összes pick</span><b>${ticket.total_picks || 0}</b><em>db</em></div>
+       <div><span>Full hit nap</span><b>${ticket.full_hit_tickets || 0}</b><em>db</em></div>
+      </div>
+     </div>
     </div>
    </section>
 
-   <section class="stats-inner-section">
-    <div class="stats-section-header">
-     <div>
-      <div class="top-stat-kicker">AI Tippmix</div>
-      <div class="top-stat-title">Havi szelvény stat</div>
-     </div>
-     <div class="top-stat-badge">${ticket.ticket_days || 0} szelvény nap</div>
-    </div>
+   <section class="stats-inner-section stats-collapsible-section">
+    <button class="stats-sub-toggle" type="button" data-day-target="${ticketSectionId}">
+     <span>
+      <b>Napi szelvények</b>
+      <small>AI Tippmix bontás napokra</small>
+     </span>
+     <span class="arrow small"></span>
+    </button>
 
-    <div class="top-stat-grid">
-     ${renderStatBox("Összes pick", ticket.total_picks || 0)}
-     ${renderStatBox("Eltalált pick", ticket.hit_picks || 0, pctText(ticket.pick_hit_rate))}
-     ${renderStatBox("Értékelt pick", ticket.settled_picks || 0)}
-     ${renderStatBox("Full hit nap", ticket.full_hit_tickets || 0)}
+    <div class="stats-sub-body" id="${ticketSectionId}">
+     ${renderDailyTickets(monthData.daily_tickets || [])}
     </div>
    </section>
 
-   <section class="stats-inner-section">
-    <div class="stats-section-header">
-     <div>
-      <div class="top-stat-kicker">Napi szelvények</div>
-      <div class="top-stat-title">AI Tippmix bontás</div>
-     </div>
+   <section class="stats-inner-section stats-collapsible-section">
+    <button class="stats-sub-toggle" type="button" data-day-target="${predictionSectionId}">
+     <span>
+      <b>Napi predikciók</b>
+      <small>Találatok napi bontásban</small>
+     </span>
+     <span class="arrow small"></span>
+    </button>
+
+    <div class="stats-sub-body" id="${predictionSectionId}">
+     ${renderDailyPredictions(monthData.daily_predictions || [])}
     </div>
-
-    ${renderDailyTickets(monthData.daily_tickets || [])}
-   </section>
-
-   <section class="stats-inner-section">
-    <div class="stats-section-header">
-     <div>
-      <div class="top-stat-kicker">Napi predikciók</div>
-      <div class="top-stat-title">Predikció találatok napi bontásban</div>
-     </div>
-    </div>
-
-    ${renderDailyPredictions(monthData.daily_predictions || [])}
    </section>
   </div>
  </section>
