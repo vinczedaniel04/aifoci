@@ -87,7 +87,7 @@ exports.handler = async function () {
    .not("actual_home_goals", "is", null)
    .not("actual_away_goals", "is", null)
    .order("match_date", { ascending: false })
-   .limit(150);
+   .limit(300);
 
   if (finishedError) throw finishedError;
 
