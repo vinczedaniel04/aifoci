@@ -558,7 +558,7 @@ async function saveAiTicketIfMissing() {
   }
  }
 
- if (finalPicks.length < 2) {
+ if (finalPicks.length < 1) {
   return {
    created: false,
    reason: "Nincs elég vállalható train-model alapján jóváhagyott tipp a mai napra",
