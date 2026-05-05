@@ -2492,3 +2492,718 @@ img {
     font-size: 13px;
   }
 }
+
+/* =========================================================
+   FINAL POLISH OVERRIDES - AiFociTippek
+   Keep this block at the VERY END of style.css
+   ========================================================= */
+
+/* --- Global app feel --- */
+:root {
+  --surface-1: rgba(8, 22, 48, 0.92);
+  --surface-2: rgba(13, 31, 66, 0.88);
+  --glow-blue: rgba(79, 141, 253, 0.30);
+  --glow-cyan: rgba(0, 240, 255, 0.18);
+  --good: #86efac;
+  --bad: #fca5a5;
+  --warn: #facc15;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(0, 240, 255, 0.10), transparent 30%),
+    radial-gradient(circle at 90% 10%, rgba(157, 0, 255, 0.10), transparent 30%),
+    linear-gradient(180deg, #08162c 0%, #041127 48%, #061225 100%);
+}
+
+.container {
+  width: min(1150px, 100%);
+}
+
+.card,
+.ticket-panel,
+.league-block,
+.match-card,
+.month-accordion,
+.admin-section,
+.admin-login-card {
+  backdrop-filter: blur(10px);
+}
+
+/* --- Header and nav --- */
+.header-shell {
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
+}
+
+.brand-header .top-nav {
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.03),
+    0 10px 24px rgba(0,0,0,0.18);
+}
+
+.brand-header .top-nav-link {
+  letter-spacing: 0.01em;
+}
+
+/* --- Desktop cards cleaner spacing --- */
+.ticket-panel,
+.league-block,
+.month-accordion,
+.admin-section,
+.admin-login-card {
+  margin-inline: auto;
+}
+
+.league-content {
+  padding-inline: 16px;
+}
+
+.match-card {
+  border-color: rgba(146, 177, 230, 0.16);
+}
+
+/* --- Match layout polish --- */
+.team-name {
+  max-width: 100%;
+}
+
+.match-header,
+.league-header,
+.month-accordion-header,
+.day-accordion-header,
+.stats-sub-toggle {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.compact-box strong,
+.detail-box strong,
+.market-right,
+.market-left {
+  letter-spacing: -0.02em;
+}
+
+/* --- Stats page: calmer, more readable --- */
+.month-accordion {
+  background:
+    linear-gradient(180deg, rgba(18, 35, 62, 0.98), rgba(7, 18, 38, 0.98));
+  border-color: rgba(146, 177, 230, 0.20);
+}
+
+.month-accordion-header {
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.month-accordion-header:hover {
+  background: rgba(79, 141, 253, 0.06);
+}
+
+.monthly-summary-card,
+.stats-inner-section,
+.monthly-ticket {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+.monthly-summary-list div {
+  min-height: 42px;
+}
+
+.stats-sub-toggle {
+  border-radius: 20px;
+}
+
+.stats-sub-body.open {
+  animation: softOpen 0.18s ease both;
+}
+
+.day-accordion-body.open,
+.month-accordion-body.open,
+.match-body.open,
+.league-content.open,
+.top-stat-body.open {
+  animation: softOpen 0.18s ease both;
+}
+
+@keyframes softOpen {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Admin page polish --- */
+.admin-run-btn {
+  background: linear-gradient(135deg, rgba(79, 141, 253, 0.98), rgba(123, 134, 255, 0.92));
+  box-shadow: 0 10px 20px rgba(79, 141, 253, 0.16);
+}
+
+.admin-run-btn:hover {
+  transform: translateY(-1px);
+  opacity: 1;
+}
+
+.admin-token-row input:focus {
+  outline: 2px solid rgba(79, 141, 253, 0.55);
+  outline-offset: 2px;
+}
+
+/* --- Better readable status/pills --- */
+.top-stat-badge,
+.ticket-pick-strength,
+.hit-pill {
+  letter-spacing: 0.01em;
+}
+
+.hit-pill.hit,
+.ticket-pick-strength {
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.hit-pill.miss {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.hit-pill.pending {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+/* =========================================================
+   MOBILE APP MODE
+   ========================================================= */
+
+@media (max-width: 800px) {
+  body {
+    padding-bottom: 86px;
+  }
+
+  .container {
+    padding: 10px;
+  }
+
+  /* Header becomes compact because navigation moves to bottom */
+  .header-shell {
+    margin-bottom: 12px;
+    border-radius: 20px;
+  }
+
+  .brand-header {
+    padding: 16px 10px 18px;
+  }
+
+  .logo-title {
+    gap: 7px;
+  }
+
+  .brand-title-text {
+    font-size: clamp(29px, 9.5vw, 42px);
+    line-height: 0.96;
+    letter-spacing: -0.03em;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    padding: 4px;
+  }
+
+  .brand-header p {
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  /* Bottom app navigation */
+  .brand-header .top-nav {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 9999;
+    width: auto;
+    margin: 0;
+    padding: 7px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    border-radius: 22px;
+    background: rgba(4, 17, 39, 0.92);
+    border: 1px solid rgba(146, 177, 230, 0.28);
+    box-shadow:
+      0 18px 40px rgba(0,0,0,0.45),
+      inset 0 0 0 1px rgba(255,255,255,0.03);
+    backdrop-filter: blur(18px);
+  }
+
+  .brand-header .top-nav-link,
+  .brand-header .top-nav-link:visited {
+    min-height: 42px;
+    padding: 0 6px;
+    font-size: 11px;
+    border-radius: 16px;
+    white-space: nowrap;
+  }
+
+  .brand-header .top-nav-link.active {
+    box-shadow: 0 0 18px rgba(79, 141, 253, 0.28);
+  }
+
+  /* Main rhythm */
+  .ticket-panel,
+  .league-block,
+  .month-accordion,
+  .admin-section,
+  .admin-login-card,
+  .stats-filter-card {
+    border-radius: 18px;
+    margin-bottom: 10px;
+  }
+
+  .ticket-panel {
+    padding: 13px;
+  }
+
+  .ticket-toggle {
+    font-size: 15px;
+  }
+
+  .ticket-pick {
+    border-radius: 14px;
+    padding: 10px;
+  }
+
+  /* League cards */
+  .league-header {
+    padding: 14px;
+    gap: 7px;
+  }
+
+  .league-title-wrap {
+    font-size: 16px;
+    gap: 8px;
+  }
+
+  .league-logo {
+    width: 20px;
+    height: 20px;
+  }
+
+  .league-toggle-text,
+  .league-live-pill {
+    font-size: 11px;
+  }
+
+  .league-content {
+    padding: 0 8px 10px;
+  }
+
+  /* Match cards */
+  .match-card {
+    margin: 9px 0;
+    border-radius: 18px;
+  }
+
+  .match-card:hover,
+  .top-mini-box:hover,
+  .market-pill:hover {
+    transform: none;
+  }
+
+  .match-header {
+    padding: 12px;
+  }
+
+  .match-header-top {
+    margin-bottom: 9px;
+  }
+
+  .finished-badge,
+  .live-badge,
+  .scheduled-badge {
+    padding: 7px 11px;
+    font-size: 11px;
+  }
+
+  .teams-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
+    gap: 5px;
+    align-items: start;
+    margin-bottom: 8px;
+  }
+
+  .team-side {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 5px;
+    align-items: start;
+  }
+
+  .away-side {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    text-align: right;
+  }
+
+  .team-name-wrap,
+  .away-name-wrap {
+    gap: 4px;
+  }
+
+  .team-name {
+    font-size: 11px;
+    line-height: 1.18;
+    overflow-wrap: anywhere;
+  }
+
+  .team-logo {
+    width: 17px;
+    height: 17px;
+  }
+
+  .team-score {
+    font-size: 18px;
+    min-width: 14px;
+    margin: 0;
+  }
+
+  .vs-block {
+    min-width: 26px;
+    padding-top: 2px;
+  }
+
+  .vs {
+    font-size: 11px;
+  }
+
+  .time {
+    font-size: 11px;
+    margin-bottom: 8px;
+  }
+
+  .inline-team-form {
+    gap: 2px;
+  }
+
+  .form-badge {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 7px;
+  }
+
+  .market-row {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .market-pill {
+    min-height: 52px;
+    padding: 7px 5px;
+    border-radius: 15px;
+  }
+
+  .market-left,
+  .market-right,
+  .market-short {
+    font-size: 13px;
+  }
+
+  .market-logo {
+    width: 19px;
+    height: 19px;
+  }
+
+  .match-body {
+    padding: 0 10px 12px;
+  }
+
+  .compact-grid,
+  .detail-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .compact-box,
+  .detail-box {
+    padding: 11px;
+    border-radius: 14px;
+  }
+
+  .compact-box strong,
+  .detail-box strong {
+    font-size: 18px;
+  }
+
+  .compact-box .label,
+  .detail-box .label {
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+
+  .toggle-btn {
+    border-radius: 14px;
+    padding: 11px;
+    font-size: 12px;
+  }
+
+  .explanation {
+    font-size: 12px;
+    padding: 11px;
+    border-radius: 14px;
+  }
+
+  /* Stats page mobile */
+  .stats-status {
+    font-size: 11px;
+    margin: 0 2px 8px;
+  }
+
+  .stats-filter-card {
+    padding: 13px;
+  }
+
+  .month-accordion-header {
+    padding: 14px;
+    min-height: auto;
+  }
+
+  .month-title {
+    font-size: 18px;
+  }
+
+  .month-header-right {
+    width: 100%;
+    gap: 6px;
+  }
+
+  .month-header-right .top-stat-badge,
+  .stats-section-header .top-stat-badge {
+    padding: 7px 9px;
+    font-size: 10px;
+  }
+
+  .month-accordion-body {
+    padding: 0 8px 8px;
+  }
+
+  .stats-inner-section {
+    margin-top: 9px;
+    padding: 10px;
+    border-radius: 15px;
+  }
+
+  .monthly-overview-section {
+    padding: 10px;
+  }
+
+  .monthly-overview-grid {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .monthly-summary-card {
+    padding: 11px;
+    border-radius: 15px;
+  }
+
+  .monthly-summary-head {
+    margin-bottom: 8px;
+  }
+
+  .monthly-summary-head span {
+    font-size: 12px;
+  }
+
+  .monthly-summary-head strong {
+    font-size: 25px;
+  }
+
+  .monthly-summary-list {
+    gap: 6px;
+  }
+
+  .monthly-summary-list div {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .monthly-summary-list span,
+  .monthly-summary-list b,
+  .monthly-summary-list em {
+    font-size: 11px;
+  }
+
+  .monthly-summary-list em {
+    grid-column: 1 / -1;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .stats-sub-toggle {
+    padding: 12px;
+  }
+
+  .stats-sub-toggle b {
+    font-size: 14px;
+  }
+
+  .stats-sub-toggle small {
+    font-size: 10px;
+  }
+
+  .stats-sub-body {
+    padding: 0 8px 8px;
+  }
+
+  .monthly-ticket {
+    padding: 0;
+    border-radius: 14px;
+    margin-top: 8px;
+  }
+
+  .day-accordion-header {
+    padding: 11px;
+  }
+
+  .day-accordion-header strong {
+    font-size: 14px;
+  }
+
+  .day-accordion-header small {
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .day-header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .day-accordion-body {
+    padding: 0 8px 8px;
+  }
+
+  .monthly-pick-row,
+  .monthly-match-row {
+    padding: 9px;
+    border-radius: 12px;
+    gap: 6px;
+  }
+
+  .monthly-pick-main strong,
+  .monthly-match-main strong {
+    font-size: 11px;
+  }
+
+  .monthly-pick-main small,
+  .monthly-match-main small {
+    font-size: 10px;
+  }
+
+  .monthly-hit-group {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .mini-hit-label {
+    min-width: 35px;
+    font-size: 8px;
+  }
+
+  .hit-pill {
+    min-width: 46px;
+    min-height: 23px;
+    padding: 0 7px;
+    font-size: 9px;
+  }
+
+  /* Admin mobile */
+  .admin-login-card,
+  .admin-section {
+    padding: 13px;
+  }
+
+  .admin-token-row {
+    gap: 8px;
+  }
+
+  .admin-token-row input {
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  .admin-actions-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .admin-run-btn {
+    min-height: 42px;
+    border-radius: 14px;
+  }
+
+  .admin-setting-row,
+  .admin-change-row {
+    padding: 10px;
+    border-radius: 13px;
+  }
+
+  .admin-output {
+    max-height: 300px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 420px) {
+  .container {
+    padding: 8px;
+  }
+
+  .brand-title-text {
+    font-size: 29px;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .brand-header .top-nav-link {
+    font-size: 10px;
+  }
+
+  .league-title-wrap {
+    font-size: 15px;
+  }
+
+  .team-name {
+    font-size: 10px;
+  }
+
+  .market-left,
+  .market-right,
+  .market-short {
+    font-size: 12px;
+  }
+
+  .top-mini-box strong {
+    font-size: 20px;
+  }
+}
+
+/* Desktop/tablet: hide bottom-navigation padding behavior */
+@media (min-width: 801px) {
+  body {
+    padding-bottom: 0;
+  }
+}
