@@ -396,14 +396,26 @@ async function saveAiTicketIfMissing() {
   const expectedAwayGoals = Number(row.predicted_away_goals || 0);
   const totalGoals = expectedHomeGoals + expectedAwayGoals;
 
+  const overThreshold = Number(row.used_over25_threshold || 60);
+  const bttsThreshold = Number(row.used_btts_threshold || 60);
+
   const best1x2 = Math.max(homeProb, drawProb, awayProb);
   const secondBest1x2 = [homeProb, drawProb, awayProb]
    .sort((a, b) => b - a)[1];
 
   const gap1x2 = best1x2 - secondBest1x2;
 
-  // 1X2: ne csak nyers százalékot nézzen, hanem azt is, mennyire válik el a második opciótól.
-  if (homeProb === best1x2 && homeProb >= 47 && gap1x2 >= 6) {
+  /*
+   1X2:
+   Itt már nem saját döntést hozunk, hanem a predictMatch által kiszámolt
+   predicted_1x2_pick mezőt követjük. A szelvény csak akkor veszi be,
+   ha a hozzá tartozó százalék elég vállalható.
+  */
+  if (
+   row.predicted_1x2_pick === "HOME" &&
+   homeProb >= 47 &&
+   gap1x2 >= 5
+  ) {
    addCandidate({
     row,
     pickType: "HOME_WIN",
@@ -414,7 +426,11 @@ async function saveAiTicketIfMissing() {
    });
   }
 
-  if (awayProb === best1x2 && awayProb >= 47 && gap1x2 >= 6) {
+  if (
+   row.predicted_1x2_pick === "AWAY" &&
+   awayProb >= 47 &&
+   gap1x2 >= 5
+  ) {
    addCandidate({
     row,
     pickType: "AWAY_WIN",
@@ -425,8 +441,11 @@ async function saveAiTicketIfMissing() {
    });
   }
 
-  // Döntetlen ritkán megy 40 fölé, ezért itt alacsonyabb küszöb kell.
-  if (drawProb === best1x2 && drawProb >= 34 && gap1x2 >= 2) {
+  if (
+   row.predicted_1x2_pick === "DRAW" &&
+   drawProb >= 34 &&
+   gap1x2 >= 1.5
+  ) {
    addCandidate({
     row,
     pickType: "DRAW",
@@ -437,8 +456,15 @@ async function saveAiTicketIfMissing() {
    });
   }
 
-  // Over 2.5: picit lazább, de kell hozzá várható gól is.
-  if (overProb >= 57 && totalGoals >= 2.5) {
+  /*
+   Over 2.5:
+   Csak akkor kerülhet szelvénybe, ha a train-model thresholdökkel számolt
+   végső predikció is 2,5 FELETT.
+  */
+  if (
+   row.final_over25_tip === "2,5 FELETT" &&
+   overProb >= overThreshold
+  ) {
    addCandidate({
     row,
     pickType: "OVER25",
@@ -449,12 +475,14 @@ async function saveAiTicketIfMissing() {
    });
   }
 
-  // BTTS: ne legyen túl szigorú, de mindkét csapat várható gólja legyen értelmezhető.
+  /*
+   BTTS:
+   Csak akkor kerülhet szelvénybe, ha a train-model thresholdökkel számolt
+   végső predikció is IGEN.
+  */
   if (
-   bttsProb >= 56 &&
    row.final_btts_tip === "IGEN" &&
-   expectedHomeGoals >= 0.9 &&
-   expectedAwayGoals >= 0.9
+   bttsProb >= bttsThreshold
   ) {
    addCandidate({
     row,
@@ -474,38 +502,56 @@ async function saveAiTicketIfMissing() {
  const finalPicks = [];
  const usedExactPick = new Set();
  const picksPerMatch = new Map();
+ const usedMarketPerMatch = new Set();
 
  for (const pick of sortedCandidates) {
   const exactKey = `${pick.match_id}_${pick.pick_type}`;
+  const marketKey = `${pick.match_id}_${pick.market_group}`;
+
   if (usedExactPick.has(exactKey)) continue;
 
   const currentMatchPickCount = picksPerMatch.get(pick.match_id) || 0;
 
-  // Egy meccsből maximum 2 tipp, hogy ne egy meccs vigye el az egész szelvényt.
+  /*
+   Egy meccsből max 2 tipp, de ugyanabból a piacból csak 1.
+   Például: 1X2 + BTTS mehet, de két 1X2 nem.
+  */
   if (currentMatchPickCount >= 2) continue;
+  if (usedMarketPerMatch.has(marketKey)) continue;
 
-  // Ha már van 4 pick, az ötödik csak erősebb legyen.
+  /*
+   Az ötödik pick csak akkor jöjjön, ha tényleg erős.
+  */
   if (finalPicks.length >= 4 && pick.confidence < 58) continue;
 
   finalPicks.push(pick);
   usedExactPick.add(exactKey);
+  usedMarketPerMatch.add(marketKey);
   picksPerMatch.set(pick.match_id, currentMatchPickCount + 1);
 
   if (finalPicks.length >= 5) break;
  }
 
- // Ha túl kevés lenne, engedünk még egy kicsit a küszöbön, de csak vállalható tippeket.
+ /*
+  Ha túl kevés lenne, akkor is csak a train-modeles végső tippekből engedünk,
+  nem gyártunk külön, ellentmondó szelvénylogikát.
+ */
  if (finalPicks.length < 3) {
   for (const pick of sortedCandidates) {
    const exactKey = `${pick.match_id}_${pick.pick_type}`;
+   const marketKey = `${pick.match_id}_${pick.market_group}`;
+
    if (usedExactPick.has(exactKey)) continue;
 
    const currentMatchPickCount = picksPerMatch.get(pick.match_id) || 0;
+
    if (currentMatchPickCount >= 2) continue;
-   if (pick.confidence < 53) continue;
+   if (usedMarketPerMatch.has(marketKey)) continue;
+   if (pick.confidence < 52) continue;
 
    finalPicks.push(pick);
    usedExactPick.add(exactKey);
+   usedMarketPerMatch.add(marketKey);
    picksPerMatch.set(pick.match_id, currentMatchPickCount + 1);
 
    if (finalPicks.length >= 3) break;
@@ -515,7 +561,7 @@ async function saveAiTicketIfMissing() {
  if (finalPicks.length < 2) {
   return {
    created: false,
-   reason: "Nincs elég vállalható tipp a mai napra",
+   reason: "Nincs elég vállalható train-model alapján jóváhagyott tipp a mai napra",
    candidate_count: candidates.length
   };
  }
@@ -556,7 +602,13 @@ async function saveAiTicketIfMissing() {
   already_exists: false,
   ticket_id: ticketInsert.id,
   saved_picks: finalPicks.length,
-  candidate_count: candidates.length
+  candidate_count: candidates.length,
+  picks: finalPicks.map((pick) => ({
+   match_id: pick.match_id,
+   label: pick.pick_label,
+   value: pick.pick_value,
+   confidence: pick.confidence
+  }))
  };
 }
 
