@@ -4,7 +4,7 @@ const reloadAdminBtn = document.getElementById("reloadAdminBtn");
 const statusEl = document.getElementById("admin-status");
 const panelEl = document.getElementById("admin-panel");
 
-const TOKEN_KEY = "Bableves28.0510.";
+const TOKEN_KEY = "aifoci_admin_token";
 
 function getToken() {
  return localStorage.getItem(TOKEN_KEY) || "";
@@ -48,6 +48,16 @@ function pct(value) {
  return `${n.toFixed(2)}%`;
 }
 
+function renderStatBox(label, value, small = "") {
+ return `
+  <div class="top-mini-box">
+   <span class="label">${label}</span>
+   <strong>${value}</strong>
+   ${small ? `<small>${small}</small>` : ""}
+  </div>
+ `;
+}
+
 function renderSettingRow(label, value, suffix = "") {
  return `
   <div class="admin-setting-row">
@@ -86,8 +96,6 @@ function renderModelSettings(settings) {
 }
 
 function renderTrainingLog(log, index) {
- const oldSettings = safeJson(log.old_settings);
- const newSettings = safeJson(log.new_settings);
  const changes = safeJson(log.changes);
  const metrics = safeJson(log.metrics);
 
