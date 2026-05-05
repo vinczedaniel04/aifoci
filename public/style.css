@@ -1326,6 +1326,169 @@ button:hover {
 .stats-sub-body.open {
   display: block;
 }
+/* ===== ADMIN PANEL ===== */
+
+.admin-login-card,
+.admin-section {
+  padding: 22px 24px;
+  margin-bottom: 18px;
+}
+
+.admin-login-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-token-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-token-row input {
+  min-height: 42px;
+  min-width: 260px;
+  border-radius: 14px;
+  border: 1px solid rgba(146, 177, 230, 0.28);
+  background: #07162d;
+  color: #f8fafc;
+  padding: 0 12px;
+  font-weight: 800;
+}
+
+.admin-settings-grid,
+.admin-metrics-grid,
+.admin-ticket-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-setting-row,
+.admin-change-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.admin-setting-row span,
+.admin-change-row span {
+  color: #9fb0c9;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-setting-row strong,
+.admin-change-row b {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.admin-change-row em {
+  min-width: 70px;
+  text-align: right;
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 900;
+  color: #cbd5e1;
+}
+
+.admin-change-row em.positive {
+  color: #86efac;
+}
+
+.admin-change-row em.negative {
+  color: #fca5a5;
+}
+
+.admin-change-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.admin-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-run-btn {
+  border-radius: 16px;
+  min-height: 44px;
+}
+
+.admin-output {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(5, 17, 39, 0.86);
+  border: 1px solid rgba(146, 177, 230, 0.16);
+  color: #dbeafe;
+  overflow-x: auto;
+  max-height: 420px;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
+.admin-error {
+  border-color: rgba(239, 68, 68, 0.38);
+  color: #fca5a5;
+}
+
+@media (max-width: 800px) {
+  .admin-login-card {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+  }
+
+  .admin-token-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-token-row input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .admin-section {
+    padding: 16px;
+  }
+
+  .admin-settings-grid,
+  .admin-metrics-grid,
+  .admin-ticket-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-setting-row,
+  .admin-change-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .admin-setting-row strong,
+  .admin-change-row b,
+  .admin-change-row em {
+    text-align: left;
+  }
+}
 
 /* Mobilos stat oldal áttekinthetőbb */
 @media (max-width: 800px) {

@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AiFociTippek</title>
+
+  <title>AiFociTippek - Admin</title>
+
   <link rel="stylesheet" href="/style.css" />
   <link rel="icon" sizes="64x64" href="/favicon64.png"/>
   <link rel="icon" sizes="192x192" href="/favicon192.png"/>
@@ -17,33 +19,38 @@
       <header class="brand-header">
         <h1 class="logo-title">
           <img src="/favicon192.png" class="logo-icon" alt="AiFociTippek logo" />
-          <span class="brand-title-text">AiFociTippek</span>
+          <span class="brand-title-text">Admin</span>
           <img src="/favicon192.png" class="logo-icon" alt="AiFociTippek logo" />
         </h1>
 
-        <p>Statok, kimenetelek egy helyen</p>
+        <p>Modell kontroll panel és kézi frissítések</p>
 
         <nav class="top-nav">
-  <a href="/" class="top-nav-link active">Mai meccsek</a>
+  <a href="/" class="top-nav-link">Mai meccsek</a>
   <a href="/stats.html" class="top-nav-link">Havi statisztika</a>
-  <a href="/admin.html" class="top-nav-link">Admin</a>
+  <a href="/admin.html" class="top-nav-link active">Admin</a>
 </nav>
       </header>
     </div>
 
-    <div id="ai-stats" class="home-ai-stats-hidden"></div>
+    <section class="card admin-login-card">
+      <div>
+        <div class="top-stat-kicker">Admin hozzáférés</div>
+        <div class="top-stat-title">Token</div>
+      </div>
 
-    <section class="panel ticket-panel">
-      <h2 id="ticketToggle" class="ticket-toggle">
-        <span class="ticket-title-text">Mai AI Tippmix🎯</span>
-        <span id="ticketArrow">▼</span>
-      </h2>
-      <div id="ai-ticket" style="display:none;"></div>
+      <div class="admin-token-row">
+        <input id="adminTokenInput" type="password" placeholder="ADMIN_TOKEN" />
+        <button id="saveTokenBtn" type="button">Mentés</button>
+        <button id="reloadAdminBtn" type="button">Frissítés</button>
+      </div>
     </section>
 
-    <main id="list"></main>
+    <div id="admin-status" class="stats-status">Add meg az admin tokent.</div>
+
+    <main id="admin-panel"></main>
   </div>
 
-  <script src="/app.js"></script>
+  <script src="/admin.js"></script>
 </body>
 </html>
