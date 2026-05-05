@@ -178,7 +178,7 @@ function renderMonthBlock(monthData, index) {
     <div class="monthly-overview-grid">
      <div class="monthly-summary-card">
       <div class="monthly-summary-head">
-       <span>AI elemzés</span>
+       <span>AI predikciók</span>
        <strong>${prediction.total || 0}</strong>
       </div>
 
@@ -192,7 +192,7 @@ function renderMonthBlock(monthData, index) {
 
      <div class="monthly-summary-card highlight">
       <div class="monthly-summary-head">
-       <span>AI Tippmix</span>
+       <span>AI Tippmix szelvény</span>
        <strong>${ticket.total_picks || 0}</strong>
       </div>
 
@@ -210,7 +210,7 @@ function renderMonthBlock(monthData, index) {
     <button class="stats-sub-toggle" type="button" data-day-target="${ticketSectionId}">
      <span>
       <b>Napi szelvények</b>
-      <small>AI Tippmix bontás napokra</small>
+      <small>AI Tippmix szelvény bontás napokra</small>
      </span>
      <span class="arrow small"></span>
     </button>
