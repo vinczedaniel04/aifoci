@@ -4,7 +4,7 @@ const reloadAdminBtn = document.getElementById("reloadAdminBtn");
 const statusEl = document.getElementById("admin-status");
 const panelEl = document.getElementById("admin-panel");
 
-const TOKEN_KEY = "aifoci_admin_token";
+const TOKEN_KEY = "Bableves28.0510.";
 
 function getToken() {
  return localStorage.getItem(TOKEN_KEY) || "";
