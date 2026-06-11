@@ -8,46 +8,51 @@ exports.handler = async function () {
     if (!supabaseUrl || !supabaseKey) {
       return {
         statusCode: 500,
-        headers: {
-          "content-type": "application/json",
-          "cache-control": "no-store"
-        },
-        body: JSON.stringify({
-          error: "Hiányzó SUPABASE_URL vagy SUPABASE_SERVICE_ROLE_KEY"
-        })
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+        body: JSON.stringify({ error: "Hiányzó kulcsok" })
       };
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    function getLogicalDates() {
-      const now = new Date();
-      // Levonunk 6 órát a "logikai" naphoz
-      const logicalNow = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-      const todayStr = `${logicalNow.getUTCFullYear()}-${String(logicalNow.getUTCMonth() + 1).padStart(2, "0")}-${String(logicalNow.getUTCDate()).padStart(2, "0")}`;
+    // 1. Kiszámoljuk a logikai napot
+    const now = new Date();
+    const logicalNow = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+    
+    const ty = logicalNow.getUTCFullYear();
+    const tm = String(logicalNow.getUTCMonth() + 1).padStart(2, "0");
+    const td = String(logicalNow.getUTCDate()).padStart(2, "0");
+    const todayStr = `${ty}-${tm}-${td}`;
 
-      // Létrehozunk tökéletes Date objektumokat, amikből a gép hajszálpontos ISO stringet csinál
-      const startOfDay = new Date(`${todayStr}T00:00:00Z`);
-      const endOfDay = new Date(startOfDay.getTime() + 30 * 60 * 60 * 1000); // Éjfél + 30 óra (másnap reggel 6:00)
+    const tomorrow = new Date(logicalNow.getTime() + 24 * 60 * 60 * 1000);
+    const tomy = tomorrow.getUTCFullYear();
+    const tomm = String(tomorrow.getUTCMonth() + 1).padStart(2, "0");
+    const tomd = String(tomorrow.getUTCDate()).padStart(2, "0");
+    const tomorrowStr = `${tomy}-${tomm}-${tomd}`;
 
-      return { 
-        todayStr, 
-        startIso: startOfDay.toISOString(), 
-        endIso: endOfDay.toISOString() 
-      };
-    }
+    // A JS számára a pontos, szigorú határok ISO formátumban:
+    const startLimit = `${todayStr}T00:00:00.000Z`;
+    const endLimit = `${tomorrowStr}T06:00:00.000Z`;
 
-    const { todayStr, startIso, endIso } = getLogicalDates();
-
-    const { data: predictions, error: predictionsError } = await supabase
+    // 2. GOLYÓÁLLÓ LEKÉRÉS: Lekérünk mindent tegnaptól holnapig
+    const safeStart = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
+    const safeEnd = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+    
+    const { data: allPredictions, error: predictionsError } = await supabase
       .from("predictions_history")
       .select("*")
-      .gte("match_date", startIso)
-      .lte("match_date", endIso)
+      .gte("match_date", safeStart)
+      .lte("match_date", safeEnd)
       .order("match_date", { ascending: true });
 
     if (predictionsError) throw predictionsError;
 
+    // 3. Szigorú JS oldali szűrés: Ez 100%-os biztonsággal kiválogatja a megfelelő időablakot
+    const todayPredictions = (allPredictions || []).filter(p => {
+      return p.match_date >= startLimit && p.match_date <= endLimit;
+    });
+
+    // 4. Overall stats lekérése
     const { data: finishedMatches, error: finishedError } = await supabase
       .from("predictions_history")
       .select("*")
@@ -56,7 +61,6 @@ exports.handler = async function () {
       .not("actual_away_goals", "is", null);
 
     if (finishedError) throw finishedError;
-
     const finished = finishedMatches || [];
 
     const overallStats = {
@@ -69,27 +73,19 @@ exports.handler = async function () {
 
     return {
       statusCode: 200,
-      headers: {
-        "content-type": "application/json",
-        "cache-control": "no-store"
-      },
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
       body: JSON.stringify({
         ok: true,
         match_day: todayStr,
-        predictions: predictions || [],
+        predictions: todayPredictions,
         overall_stats: overallStats
       })
     };
   } catch (err) {
     return {
       statusCode: 500,
-      headers: {
-        "content-type": "application/json",
-        "cache-control": "no-store"
-      },
-      body: JSON.stringify({
-        error: err.message || "Ismeretlen hiba"
-      })
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+      body: JSON.stringify({ error: err.message || "Ismeretlen hiba" })
     };
   }
 };
