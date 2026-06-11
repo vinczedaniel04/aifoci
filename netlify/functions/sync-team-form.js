@@ -46,7 +46,8 @@ exports.handler = async function () {
    SA: 0.95,
    FL1: 0.93,
    DED: 0.89,
-   OTHERS: 0.9
+   OTHERS: 0.9,
+   WC: 1.00
   };
 
   function getLeagueStrength(code) {

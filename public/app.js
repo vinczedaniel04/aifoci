@@ -99,7 +99,8 @@ function formatCompetitionName(code, fallback) {
   PPL: "Primeira Liga",
   DED: "Eredivisie",
   ELC: "Championship",
-  BSA: "Brazil Serie A"
+  BSA: "Brazil Serie A",
+  WC: "Világbajnokság"
  };
 
  return map[code] || fallback || code;

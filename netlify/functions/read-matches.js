@@ -25,7 +25,8 @@ exports.handler = async function () {
  "BL1",
  "SA",
  "FL1",
- "CL"
+ "CL",
+ "WC"
  ];
 
  function isTodayUtc(dateString) {

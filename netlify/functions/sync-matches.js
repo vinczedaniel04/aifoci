@@ -22,7 +22,8 @@ exports.handler = async function () {
  "PD",
  "BL1",
  "SA",
- "FL1"
+ "FL1",
+ "WC"
  ];
 
  function getTodayUtcDate() {
