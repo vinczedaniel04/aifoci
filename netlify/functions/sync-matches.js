@@ -2,251 +2,262 @@ const { createClient } = require("@supabase/supabase-js");
 
 exports.handler = async function () {
  try {
- const supabase = createClient(
- process.env.SUPABASE_URL,
- process.env.SUPABASE_SERVICE_ROLE_KEY
- );
+  const supabase = createClient(
+   process.env.SUPABASE_URL,
+   process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
 
- const footballToken = process.env.FOOTBALL_DATA_API_KEY;
+  const footballToken = process.env.FOOTBALL_DATA_API_KEY;
 
- if (!footballToken) {
- throw new Error("Hiányzó FOOTBALL_DATA_API_KEY");
- }
+  if (!footballToken) {
+   throw new Error("Hiányzó FOOTBALL_DATA_API_KEY");
+  }
 
- const API_BASE = "https://api.football-data.org/v4";
+  const API_BASE = "https://api.football-data.org/v4";
 
- // Csak topligák + BL
- const DEFAULT_COMPETITIONS = [
- "CL",
- "PL",
- "PD",
- "BL1",
- "SA",
- "FL1",
- "WC"
- ];
+  // Csak topligák + BL + VB
+  const DEFAULT_COMPETITIONS = [
+   "CL",
+   "PL",
+   "PD",
+   "BL1",
+   "SA",
+   "FL1",
+   "WC"
+  ];
 
- function getTodayUtcDate() {
- const now = new Date();
- return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(
- now.getUTCDate()
- ).padStart(2, "0")}`;
- }
+  function getLogicalDates() {
+   const now = new Date();
+   now.setHours(now.getHours() - 6);
 
- function normalizeStatus(rawStatus, utcDate) {
- const status = (rawStatus || "").toUpperCase();
- const now = new Date();
- const kickoff = new Date(utcDate);
- const diffMinutes = (now.getTime() - kickoff.getTime()) / 60000;
+   const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
 
- if (status === "TIMED" && diffMinutes >= 2 && diffMinutes < 180) {
- return "LIVE";
- }
+   const tomorrow = new Date(now);
+   tomorrow.setDate(tomorrow.getDate() + 1);
+   const tomorrowStr = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
 
- return status || null;
- }
+   // A logikai nap éjféltől másnap reggel 6-ig tart
+   const startOfDay = `${todayStr}T00:00:00.000Z`;
+   const endOfDay = `${tomorrowStr}T06:00:00.000Z`;
 
- function sleep(ms) {
- return new Promise((resolve) => setTimeout(resolve, ms));
- }
+   return { todayStr, tomorrowStr, startOfDay, endOfDay };
+  }
 
- async function fetchCompetitionMatches(code, today) {
- const url = `${API_BASE}/competitions/${code}/matches?dateFrom=${today}&dateTo=${today}`;
+  function normalizeStatus(rawStatus, utcDate) {
+   const status = (rawStatus || "").toUpperCase();
+   const now = new Date();
+   const kickoff = new Date(utcDate);
+   const diffMinutes = (now.getTime() - kickoff.getTime()) / 60000;
 
- const response = await fetch(url, {
- headers: {
- "X-Auth-Token": footballToken
- }
- });
+   if (status === "TIMED" && diffMinutes >= 2 && diffMinutes < 180) {
+    return "LIVE";
+   }
 
- const text = await response.text();
+   return status || null;
+  }
 
- if (response.status === 429) {
- return {
- ok: false,
- rateLimited: true,
- code,
- error: `${code} rate limited: ${text}`
- };
- }
+  function sleep(ms) {
+   return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
- if (!response.ok) {
- return {
- ok: false,
- rateLimited: false,
- code,
- error: `${code} fetch hiba: ${response.status} ${text}`
- };
- }
+  async function fetchCompetitionMatches(code, dateFrom, dateTo) {
+   const url = `${API_BASE}/competitions/${code}/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`;
 
- let json;
- try {
- json = JSON.parse(text);
- } catch {
- json = {};
- }
+   const response = await fetch(url, {
+    headers: {
+     "X-Auth-Token": footballToken
+    }
+   });
 
- return {
- ok: true,
- code,
- matches: json.matches || []
- };
- }
+   const text = await response.text();
 
- const today = getTodayUtcDate();
- const startOfDay = `${today}T00:00:00.000Z`;
- const endOfDay = `${today}T23:59:59.999Z`;
+   if (response.status === 429) {
+    return {
+     ok: false,
+     rateLimited: true,
+     code,
+     error: `${code} rate limited: ${text}`
+    };
+   }
 
- const { data: existingTodayMatches, error: existingTodayError } = await supabase
- .from("matches")
- .select("match_id,status,match_date,competition_code")
- .gte("match_date", startOfDay)
- .lte("match_date", endOfDay);
+   if (!response.ok) {
+    return {
+     ok: false,
+     rateLimited: false,
+     code,
+     error: `${code} fetch hiba: ${response.status} ${text}`
+    };
+   }
 
- if (existingTodayError) throw existingTodayError;
+   let json;
+   try {
+    json = JSON.parse(text);
+   } catch {
+    json = {};
+   }
 
- const existingRows = existingTodayMatches || [];
+   return {
+    ok: true,
+    code,
+    matches: json.matches || []
+   };
+  }
 
- const hasLiveInDb = existingRows.some((m) =>
- ["LIVE", "IN_PLAY", "PAUSED"].includes((m.status || "").toUpperCase())
- );
+  const { todayStr, tomorrowStr, startOfDay, endOfDay } = getLogicalDates();
 
- const hasAnyTodayInDb = existingRows.length > 0;
+  const { data: existingTodayMatches, error: existingTodayError } = await supabase
+   .from("matches")
+   .select("match_id,status,match_date,competition_code")
+   .gte("match_date", startOfDay)
+   .lte("match_date", endOfDay);
 
- // Ha már vannak mai meccsek, csak azokat a ligákat kérdezzük újra,
- // amik a DB-ben ma tényleg szerepelnek.
- const dbCompetitionSet = new Set(
- existingRows
- .map((row) => row.competition_code)
- .filter(Boolean)
- );
+  if (existingTodayError) throw existingTodayError;
 
- const competitionsToFetch =
- dbCompetitionSet.size > 0
- ? Array.from(dbCompetitionSet)
- : DEFAULT_COMPETITIONS;
+  const existingRows = existingTodayMatches || [];
 
- let allMatches = [];
- const usedCompetitions = [];
- const skippedCompetitions = [];
- const errors = [];
+  const hasLiveInDb = existingRows.some((m) =>
+   ["LIVE", "IN_PLAY", "PAUSED"].includes((m.status || "").toUpperCase())
+  );
 
- for (const code of competitionsToFetch) {
- const result = await fetchCompetitionMatches(code, today);
+  const hasAnyTodayInDb = existingRows.length > 0;
 
- if (!result.ok) {
- skippedCompetitions.push(code);
- errors.push(result.error);
- await sleep(result.rateLimited ? 2500 : 800);
- continue;
- }
+  const dbCompetitionSet = new Set(
+   existingRows
+    .map((row) => row.competition_code)
+    .filter(Boolean)
+  );
 
- if (result.matches.length > 0) {
- usedCompetitions.push(code);
- allMatches.push(...result.matches);
- }
+  const competitionsToFetch =
+   dbCompetitionSet.size > 0
+    ? Array.from(dbCompetitionSet)
+    : DEFAULT_COMPETITIONS;
 
- await sleep(900);
- }
+  let allMatches = [];
+  const usedCompetitions = [];
+  const skippedCompetitions = [];
+  const errors = [];
 
- const normalizedMatches = allMatches.map((m) => ({
- match_id: m.id,
- match_date: m.utcDate,
- competition_code: m.competition?.code || "",
- competition_name: m.competition?.name || "",
- competition_emblem: m.competition?.emblem || null,
- status: normalizeStatus(m.status, m.utcDate),
+  for (const code of competitionsToFetch) {
+   const result = await fetchCompetitionMatches(code, todayStr, tomorrowStr);
 
- home_team_id: m.homeTeam?.id ?? null,
- home_team_name: m.homeTeam?.name || "",
- home_team_crest: m.homeTeam?.crest || null,
+   if (!result.ok) {
+    skippedCompetitions.push(code);
+    errors.push(result.error);
+    await sleep(result.rateLimited ? 2500 : 800);
+    continue;
+   }
 
- away_team_id: m.awayTeam?.id ?? null,
- away_team_name: m.awayTeam?.name || "",
- away_team_crest: m.awayTeam?.crest || null,
+   if (result.matches.length > 0) {
+    // Csak a másnap reggel 6:00 előtti meccseket engedjük be!
+    const filteredMatches = result.matches.filter(m => m.utcDate <= endOfDay);
+    
+    if (filteredMatches.length > 0) {
+     usedCompetitions.push(code);
+     allMatches.push(...filteredMatches);
+    }
+   }
 
- full_time_home: m.score?.fullTime?.home ?? null,
- full_time_away: m.score?.fullTime?.away ?? null,
+   await sleep(900);
+  }
 
- live_home:
- m.score?.fullTime?.home ??
- m.score?.halfTime?.home ??
- null,
+  const normalizedMatches = allMatches.map((m) => ({
+   match_id: m.id,
+   match_date: m.utcDate,
+   competition_code: m.competition?.code || "",
+   competition_name: m.competition?.name || "",
+   competition_emblem: m.competition?.emblem || null,
+   status: normalizeStatus(m.status, m.utcDate),
 
- live_away:
- m.score?.fullTime?.away ??
- m.score?.halfTime?.away ??
- null,
+   home_team_id: m.homeTeam?.id ?? null,
+   home_team_name: m.homeTeam?.name || "",
+   home_team_crest: m.homeTeam?.crest || null,
 
- minute: null,
- source_updated_at: new Date().toISOString(),
- updated_at: new Date().toISOString()
- }));
+   away_team_id: m.awayTeam?.id ?? null,
+   away_team_name: m.awayTeam?.name || "",
+   away_team_crest: m.awayTeam?.crest || null,
 
- if (normalizedMatches.length === 0) {
- return {
- statusCode: 200,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- ok: true,
- inserted: 0,
- updated: 0,
- has_live_in_db: hasLiveInDb,
- had_existing_today_matches: hasAnyTodayInDb,
- competitions_to_fetch: competitionsToFetch,
- used_competitions: usedCompetitions,
- skipped_competitions: skippedCompetitions,
- errors,
- match_day: today
- })
- };
- }
+   full_time_home: m.score?.fullTime?.home ?? null,
+   full_time_away: m.score?.fullTime?.away ?? null,
 
- const existingMap = new Map();
- for (const row of existingRows) {
- existingMap.set(row.match_id, row);
- }
+   live_home:
+    m.score?.fullTime?.home ??
+    m.score?.halfTime?.home ??
+    null,
 
- let inserted = 0;
- let updated = 0;
+   live_away:
+    m.score?.fullTime?.away ??
+    m.score?.halfTime?.away ??
+    null,
 
- for (const match of normalizedMatches) {
- if (existingMap.has(match.match_id)) {
- updated += 1;
- } else {
- inserted += 1;
- }
- }
+   minute: null,
+   source_updated_at: new Date().toISOString(),
+   updated_at: new Date().toISOString()
+  }));
 
- const { error: upsertError } = await supabase
- .from("matches")
- .upsert(normalizedMatches, { onConflict: "match_id" });
+  if (normalizedMatches.length === 0) {
+   return {
+    statusCode: 200,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+     ok: true,
+     inserted: 0,
+     updated: 0,
+     has_live_in_db: hasLiveInDb,
+     had_existing_today_matches: hasAnyTodayInDb,
+     competitions_to_fetch: competitionsToFetch,
+     used_competitions: usedCompetitions,
+     skipped_competitions: skippedCompetitions,
+     errors,
+     match_day: todayStr
+    })
+   };
+  }
 
- if (upsertError) throw upsertError;
+  const existingMap = new Map();
+  for (const row of existingRows) {
+   existingMap.set(row.match_id, row);
+  }
 
- return {
- statusCode: 200,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- ok: true,
- inserted,
- updated,
- has_live_in_db: hasLiveInDb,
- had_existing_today_matches: hasAnyTodayInDb,
- competitions_to_fetch: competitionsToFetch,
- used_competitions: usedCompetitions,
- skipped_competitions: skippedCompetitions,
- errors,
- match_day: today
- })
- };
+  let inserted = 0;
+  let updated = 0;
+
+  for (const match of normalizedMatches) {
+   if (existingMap.has(match.match_id)) {
+    updated += 1;
+   } else {
+    inserted += 1;
+   }
+  }
+
+  const { error: upsertError } = await supabase
+   .from("matches")
+   .upsert(normalizedMatches, { onConflict: "match_id" });
+
+  if (upsertError) throw upsertError;
+
+  return {
+   statusCode: 200,
+   headers: { "content-type": "application/json" },
+   body: JSON.stringify({
+    ok: true,
+    inserted,
+    updated,
+    has_live_in_db: hasLiveInDb,
+    had_existing_today_matches: hasAnyTodayInDb,
+    competitions_to_fetch: competitionsToFetch,
+    used_competitions: usedCompetitions,
+    skipped_competitions: skippedCompetitions,
+    errors,
+    match_day: todayStr
+   })
+  };
  } catch (error) {
- return {
- statusCode: 500,
- headers: { "content-type": "application/json" },
- body: JSON.stringify({
- error: error.message || "Ismeretlen hiba"
- })
- };
+  return {
+   statusCode: 500,
+   headers: { "content-type": "application/json" },
+   body: JSON.stringify({
+    error: error.message || "Ismeretlen hiba"
+   })
+  };
  }
 };
