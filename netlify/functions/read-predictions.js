@@ -30,8 +30,8 @@ exports.handler = async function () {
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
 
-      const startOfDay = `${todayStr}T00:00:00.000Z`;
-      const endOfDay = `${tomorrowStr}T06:00:00.000Z`;
+     const startOfDay = `${todayStr}T00:00:00`;
+      const endOfDay = `${tomorrowStr}T06:00:00`;
 
       return { todayStr, startOfDay, endOfDay };
     }
