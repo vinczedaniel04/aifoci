@@ -22,27 +22,28 @@ exports.handler = async function () {
 
     function getLogicalDates() {
       const now = new Date();
-      now.setHours(now.getHours() - 6);
+      // Levonunk 6 órát a "logikai" naphoz
+      const logicalNow = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+      const todayStr = `${logicalNow.getUTCFullYear()}-${String(logicalNow.getUTCMonth() + 1).padStart(2, "0")}-${String(logicalNow.getUTCDate()).padStart(2, "0")}`;
 
-      const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+      // Létrehozunk tökéletes Date objektumokat, amikből a gép hajszálpontos ISO stringet csinál
+      const startOfDay = new Date(`${todayStr}T00:00:00Z`);
+      const endOfDay = new Date(startOfDay.getTime() + 30 * 60 * 60 * 1000); // Éjfél + 30 óra (másnap reggel 6:00)
 
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
-
-     const startOfDay = `${todayStr}T00:00:00`;
-      const endOfDay = `${tomorrowStr}T06:00:00`;
-
-      return { todayStr, startOfDay, endOfDay };
+      return { 
+        todayStr, 
+        startIso: startOfDay.toISOString(), 
+        endIso: endOfDay.toISOString() 
+      };
     }
 
-    const { todayStr, startOfDay, endOfDay } = getLogicalDates();
+    const { todayStr, startIso, endIso } = getLogicalDates();
 
     const { data: predictions, error: predictionsError } = await supabase
       .from("predictions_history")
       .select("*")
-      .gte("match_date", startOfDay)
-      .lte("match_date", endOfDay)
+      .gte("match_date", startIso)
+      .lte("match_date", endIso)
       .order("match_date", { ascending: true });
 
     if (predictionsError) throw predictionsError;
@@ -74,7 +75,7 @@ exports.handler = async function () {
       },
       body: JSON.stringify({
         ok: true,
-        match_day: today,
+        match_day: todayStr,
         predictions: predictions || [],
         overall_stats: overallStats
       })
