@@ -27,13 +27,11 @@ exports.handler = async function () {
    tomorrow.setDate(tomorrow.getDate() + 1);
    const tomorrowStr = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
 
-   const startOfDay = `${todayStr}T00:00:00`;
-   const endOfDay = `${tomorrowStr}T06:00:00`;
+   const startOfDay = `${todayStr}T00:00:00.000Z`;
+   const endOfDay = `${tomorrowStr}T06:00:00.000Z`;
 
    return { matchDay: todayStr, startOfDay, endOfDay };
   }
-
-  const { matchDay, startOfDay, endOfDay } = getLogicalDates();
 
   function getSeasonStartYearUtc() {
    const now = new Date();
@@ -43,6 +41,7 @@ exports.handler = async function () {
    return month >= 7 ? year : year - 1;
   }
 
+  const { matchDay, startOfDay, endOfDay } = getLogicalDates();
   const season = getSeasonStartYearUtc();
 
   function factorial(n) {
@@ -415,43 +414,84 @@ exports.handler = async function () {
 
     const gap1x2 = best1x2 - secondBest1x2;
 
-    if (row.predicted_1x2_pick === "HOME" && homeProb >= 47 && gap1x2 >= 5) {
+    if (
+     row.predicted_1x2_pick === "HOME" &&
+     homeProb >= 47 &&
+     gap1x2 >= 5
+    ) {
      addCandidate({
-      row, pickType: "HOME_WIN", pickLabel: "Hazai győzelem",
-      pickValue: homeProb, confidence: homeProb + gap1x2 * 0.7, marketGroup: "1X2"
+      row,
+      pickType: "HOME_WIN",
+      pickLabel: "Hazai győzelem",
+      pickValue: homeProb,
+      confidence: homeProb + gap1x2 * 0.7,
+      marketGroup: "1X2"
      });
     }
 
-    if (row.predicted_1x2_pick === "AWAY" && awayProb >= 47 && gap1x2 >= 5) {
+    if (
+     row.predicted_1x2_pick === "AWAY" &&
+     awayProb >= 47 &&
+     gap1x2 >= 5
+    ) {
      addCandidate({
-      row, pickType: "AWAY_WIN", pickLabel: "Vendég győzelem",
-      pickValue: awayProb, confidence: awayProb + gap1x2 * 0.7, marketGroup: "1X2"
+      row,
+      pickType: "AWAY_WIN",
+      pickLabel: "Vendég győzelem",
+      pickValue: awayProb,
+      confidence: awayProb + gap1x2 * 0.7,
+      marketGroup: "1X2"
      });
     }
 
-    if (row.predicted_1x2_pick === "DRAW" && drawProb >= 34 && gap1x2 >= 1.5) {
+    if (
+     row.predicted_1x2_pick === "DRAW" &&
+     drawProb >= 34 &&
+     gap1x2 >= 1.5
+    ) {
      addCandidate({
-      row, pickType: "DRAW", pickLabel: "Döntetlen",
-      pickValue: drawProb, confidence: drawProb + gap1x2 * 0.6, marketGroup: "1X2"
+      row,
+      pickType: "DRAW",
+      pickLabel: "Döntetlen",
+      pickValue: drawProb,
+      confidence: drawProb + gap1x2 * 0.6,
+      marketGroup: "1X2"
      });
     }
 
-    if (row.final_over25_tip === "2,5 FELETT" && overProb >= overThreshold) {
+    if (
+     row.final_over25_tip === "2,5 FELETT" &&
+     overProb >= overThreshold
+    ) {
      addCandidate({
-      row, pickType: "OVER25", pickLabel: "Over 2.5",
-      pickValue: overProb, confidence: overProb + Math.max(0, totalGoals - 2.5) * 8, marketGroup: "GOALS"
+      row,
+      pickType: "OVER25",
+      pickLabel: "Over 2.5",
+      pickValue: overProb,
+      confidence: overProb + Math.max(0, totalGoals - 2.5) * 8,
+      marketGroup: "GOALS"
      });
     }
 
-    if (row.final_btts_tip === "IGEN" && bttsProb >= bttsThreshold) {
+    if (
+     row.final_btts_tip === "IGEN" &&
+     bttsProb >= bttsThreshold
+    ) {
      addCandidate({
-      row, pickType: "BTTS_YES", pickLabel: "Mindkét csapat gól",
-      pickValue: bttsProb, confidence: bttsProb + Math.min(expectedHomeGoals, expectedAwayGoals) * 4, marketGroup: "BTTS"
+      row,
+      pickType: "BTTS_YES",
+      pickLabel: "Mindkét csapat gól",
+      pickValue: bttsProb,
+      confidence:
+       bttsProb +
+       Math.min(expectedHomeGoals, expectedAwayGoals) * 4,
+      marketGroup: "BTTS"
      });
     }
    }
 
    const sortedCandidates = candidates.sort((a, b) => b.confidence - a.confidence);
+
    const finalPicks = [];
    const usedExactPick = new Set();
    const picksPerMatch = new Map();
@@ -467,6 +507,7 @@ exports.handler = async function () {
 
     if (currentMatchPickCount >= 2) continue;
     if (usedMarketPerMatch.has(marketKey)) continue;
+
     if (finalPicks.length >= 4 && pick.confidence < 58) continue;
 
     finalPicks.push(pick);
@@ -483,6 +524,7 @@ exports.handler = async function () {
      const marketKey = `${pick.match_id}_${pick.market_group}`;
 
      if (usedExactPick.has(exactKey)) continue;
+
      const currentMatchPickCount = picksPerMatch.get(pick.match_id) || 0;
 
      if (currentMatchPickCount >= 2) continue;
@@ -587,11 +629,25 @@ exports.handler = async function () {
 
     let isHit = false;
 
-    if (pick.pick_type === "HOME_WIN") isHit = home > away;
-    if (pick.pick_type === "AWAY_WIN") isHit = away > home;
-    if (pick.pick_type === "DRAW") isHit = home === away;
-    if (pick.pick_type === "OVER25") isHit = home + away >= 3;
-    if (pick.pick_type === "BTTS_YES") isHit = home > 0 && away > 0;
+    if (pick.pick_type === "HOME_WIN") {
+     isHit = home > away;
+    }
+
+    if (pick.pick_type === "AWAY_WIN") {
+     isHit = away > home;
+    }
+
+    if (pick.pick_type === "DRAW") {
+     isHit = home === away;
+    }
+
+    if (pick.pick_type === "OVER25") {
+     isHit = home + away >= 3;
+    }
+
+    if (pick.pick_type === "BTTS_YES") {
+     isHit = home > 0 && away > 0;
+    }
 
     const { error: updatePickError } = await supabase
      .from("ai_ticket_picks")

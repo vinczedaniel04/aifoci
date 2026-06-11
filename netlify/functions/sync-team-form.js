@@ -21,11 +21,20 @@ exports.handler = async function () {
   const supabase = createClient(supabaseUrl, supabaseKey);
   const API_BASE = "https://api.football-data.org/v4";
 
-  function getTodayUtcDate() {
+  function getLogicalDates() {
    const now = new Date();
-   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(
-    now.getUTCDate()
-   ).padStart(2, "0")}`;
+   now.setHours(now.getHours() - 6);
+
+   const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+
+   const tomorrow = new Date(now);
+   tomorrow.setDate(tomorrow.getDate() + 1);
+   const tomorrowStr = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
+
+   const startOfDay = `${todayStr}T00:00:00.000Z`;
+   const endOfDay = `${tomorrowStr}T06:00:00.000Z`;
+
+   return { matchDay: todayStr, startOfDay, endOfDay };
   }
 
   function getSeasonStartYearUtc() {
@@ -35,7 +44,7 @@ exports.handler = async function () {
    return month >= 7 ? year : year - 1;
   }
 
-  const matchDay = getTodayUtcDate();
+  const { matchDay, startOfDay, endOfDay } = getLogicalDates();
   const season = getSeasonStartYearUtc();
 
   const LEAGUE_STRENGTH = {
@@ -46,8 +55,8 @@ exports.handler = async function () {
    SA: 0.95,
    FL1: 0.93,
    DED: 0.89,
-   OTHERS: 0.9,
-   WC: 1.00
+   WC: 1.0,
+   OTHERS: 0.9
   };
 
   function getLeagueStrength(code) {
@@ -81,8 +90,8 @@ exports.handler = async function () {
   const { data: todayMatches, error: matchesError } = await supabase
    .from("matches")
    .select("match_date,status,home_team_id,home_team_name,away_team_id,away_team_name")
-   .gte("match_date", `${matchDay}T00:00:00`)
-   .lte("match_date", `${matchDay}T23:59:59`)
+   .gte("match_date", startOfDay)
+   .lte("match_date", endOfDay)
    .order("match_date", { ascending: true });
 
   if (matchesError) throw matchesError;
@@ -156,12 +165,10 @@ exports.handler = async function () {
    const todayForm = normalizeFormArray(todayCache?.last_5_form);
    const latestForm = normalizeFormArray(latestCache?.last_5_form);
 
-   // Ha a mai cache már teljes, nem nyúlunk hozzá.
    if (todayCache && todayForm.length >= 5) {
     continue;
    }
 
-   // Korábbi cache-ből csak teljes 5 elemű formát másolunk.
    if (latestCache && latestForm.length >= 5) {
     const { id, ...copyRow } = latestCache;
 
@@ -186,7 +193,6 @@ exports.handler = async function () {
    if (copyError) throw copyError;
   }
 
-  // Free tier miatt egyszerre csak keveset kérünk le.
   const batch = teamsToFetch.slice(0, 4);
 
   async function getRecentFinishedMatches(teamId) {
