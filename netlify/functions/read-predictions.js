@@ -20,22 +20,29 @@ exports.handler = async function () {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    function getTodayUtcDate() {
+    function getLogicalDates() {
       const now = new Date();
+      now.setHours(now.getHours() - 6);
 
-      return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
-        2,
-        "0"
-      )}-${String(now.getUTCDate()).padStart(2, "0")}`;
+      const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
+
+      const startOfDay = `${todayStr}T00:00:00.000Z`;
+      const endOfDay = `${tomorrowStr}T06:00:00.000Z`;
+
+      return { todayStr, startOfDay, endOfDay };
     }
 
-    const today = getTodayUtcDate();
+    const { todayStr, startOfDay, endOfDay } = getLogicalDates();
 
     const { data: predictions, error: predictionsError } = await supabase
       .from("predictions_history")
       .select("*")
-      .gte("match_date", `${today}T00:00:00`)
-      .lte("match_date", `${today}T23:59:59`)
+      .gte("match_date", startOfDay)
+      .lte("match_date", endOfDay)
       .order("match_date", { ascending: true });
 
     if (predictionsError) throw predictionsError;

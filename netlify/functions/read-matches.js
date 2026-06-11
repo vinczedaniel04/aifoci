@@ -30,13 +30,16 @@ exports.handler = async function () {
  ];
 
  function isTodayUtc(dateString) {
- const d = new Date(dateString);
+ const matchDate = new Date(dateString);
+ matchDate.setHours(matchDate.getHours() - 6); // Meccs idejének visszatolása
+
  const now = new Date();
+ now.setHours(now.getHours() - 6); // Jelenlegi idő visszatolása
 
  return (
- d.getUTCFullYear() === now.getUTCFullYear() &&
- d.getUTCMonth() === now.getUTCMonth() &&
- d.getUTCDate() === now.getUTCDate()
+ matchDate.getUTCFullYear() === now.getUTCFullYear() &&
+ matchDate.getUTCMonth() === now.getUTCMonth() &&
+ matchDate.getUTCDate() === now.getUTCDate()
  );
  }
 
