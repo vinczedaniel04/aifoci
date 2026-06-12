@@ -174,6 +174,7 @@ exports.handler = async function () {
   const batch = teamsToFetch.slice(0, 4);
 
 // HIBRID ADATLEKÉRŐ FÜGGVÉNY (Elsődleges + Biztonsági API)
+  // HIBRID ADATLEKÉRŐ FÜGGVÉNY (Elsődleges + Biztonsági RapidAPI Sofascore)
   async function getRecentFinishedMatchesHybrid(team) {
     let matches = [];
     
@@ -193,64 +194,76 @@ exports.handler = async function () {
       return matches;
     }
 
-    // 2. Biztonsági háló: Ha üres a lista (Válogatottak), jön az API-Football!
-    console.log(`Váltás a biztonsági API-ra a(z) ${team.team_name} csapathoz...`);
+    // 2. Biztonsági háló: Ha üres a lista, jön a RapidAPI Sofascore!
+    console.log(`Váltás a biztonsági RapidAPI Sofascore-ra a(z) ${team.team_name} csapathoz...`);
     try {
-      // Névfordító a trükkös válogatottakhoz (Kiegészíthető később is)
+      // RapidAPI Sofascore Kulcs és Host beállítása a képed alapján
+      const rapidApiKey = "adf55287c3msh42f33351578ad72p1b697fjsn519eb160df58";
+      const rapidApiHost = "sofascore.p.rapidapi.com";
+
+      // Névfordító a Sofascore nyelvére (A Sofascore finnyás a nevekre)
       const nameMap = {
         "United States": "USA",
-        "Bosnia-Herzegovina": "Bosnia",
+        "Bosnia-Herzegovina": "Bosnia & Herzegovina",
         "South Korea": "South Korea",
-        "Czech Republic": "Czech Republic"
+        "Czech Republic": "Czechia" // A Sofascore a cseheket Czechia néven ismeri
       };
       const searchName = nameMap[team.team_name] || team.team_name;
 
-      // Csapat keresése az okosított névvel
-      const searchUrl = `https://v3.football.api-sports.io/teams?search=${encodeURIComponent(searchName)}`;
+      // 1. Lépés: Csapat keresése a Sofascore adatbázisában
+      const searchUrl = `https://sofascore.p.rapidapi.com/teams/search?name=${encodeURIComponent(searchName)}`;
       const searchRes = await fetch(searchUrl, {
-        headers: { "x-apisports-key": apiFootballKey }
+        headers: {
+          "x-rapidapi-key": rapidApiKey,
+          "x-rapidapi-host": rapidApiHost
+        }
       });
       const searchData = await searchRes.json();
 
-      if (!searchData.response || searchData.response.length === 0) {
-        return matches; // Nem találtuk a biztonsági API-ban sem
+      if (!searchData.data || searchData.data.length === 0) {
+        return matches; // Nem találtuk meg a csapatot
       }
 
-      // Okos szűrés: Megkeressük a listából a kifejezett Nemzeti Válogatottat!
-      let correctTeam = searchData.response.find(r => r.team.national === true);
-      
-      // Ha véletlenül nincs national flag, marad a legelső találat
+      // Okos szűrés: Megkeressük a válogatottat (national team)
+      let correctTeam = searchData.data.find(r => r.national === true);
       if (!correctTeam) {
-          correctTeam = searchData.response[0];
+          correctTeam = searchData.data[0];
       }
 
-      const apiTeamId = correctTeam.team.id;
+      const teamId = correctTeam.id;
 
-      // Legutóbbi befejezett meccsek letöltése a megtalált azonosítóval
-      const fixUrl = `https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&last=30`;
-      const fixRes = await fetch(fixUrl, {
-        headers: { "x-apisports-key": apiFootballKey }
+      // 2. Lépés: Legutóbbi meccsek letöltése a csapat ID-ja alapján
+      // Késleltetés, hogy ne terheljük túl az 500-as limitet másodpercenként
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const eventsUrl = `https://sofascore.p.rapidapi.com/teams/get-last-matches?teamId=${teamId}`;
+      const eventsRes = await fetch(eventsUrl, {
+        headers: {
+          "x-rapidapi-key": rapidApiKey,
+          "x-rapidapi-host": rapidApiHost
+        }
       });
-      const fixData = await fixRes.json();
+      const eventsData = await eventsRes.json();
 
-      if (!fixData.response) return matches;
+      if (!eventsData.data || !eventsData.data.events) return matches;
 
-      // Lefordítjuk az új API adatait a te adatbázisod (a régi API) nyelvére
-      const mappedMatches = fixData.response
-        .filter(f => ['FT', 'AET', 'PEN'].includes(f.fixture.status.short)) // Csak a befejezettek
-        .map(f => {
-          const isHome = f.teams.home.id === apiTeamId;
-          const homeGoals = f.goals.home ?? 0;
-          const awayGoals = f.goals.away ?? 0;
+      // 3. Lépés: Lefordítjuk a Sofascore adatait a te adatbázisod nyelvére
+      const mappedMatches = eventsData.data.events
+        .filter(e => e.status && e.status.type === 'finished') // Csak a befejezettek
+        .map(e => {
+          const isHome = e.homeTeam.id === teamId;
+          const homeGoals = e.homeScore?.current ?? 0;
+          const awayGoals = e.awayScore?.current ?? 0;
+          const timestamp = e.startTimestamp * 1000; // Unix másodperc átalakítása
 
           return {
-            utcDate: f.fixture.date,
+            utcDate: new Date(timestamp).toISOString(),
             homeTeam: { id: isHome ? team.team_id : 'other' },
             awayTeam: { id: !isHome ? team.team_id : 'other' },
             score: {
               fullTime: { home: homeGoals, away: awayGoals }
             },
-            competition: { code: 'WC' } // Mag szorzót kapnak az itteni adatok (1.0)
+            competition: { code: 'WC' } // Magas szorzót kapnak
           };
       });
 
