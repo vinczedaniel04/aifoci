@@ -5,15 +5,12 @@ exports.handler = async function () {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const footballToken = process.env.FOOTBALL_DATA_API_KEY;
-  
-  // Az új API kulcsod biztonságosan beépítve a hibrid rendszerhez
-  const apiFootballKey = process.env.API_FOOTBALL_KEY || "c6ed43e5d41d4020985d034da95fb830";
 
   if (!supabaseUrl || !supabaseKey || !footballToken) {
    return {
     statusCode: 500,
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ error: "Hiányzó alapvető API kulcsok" })
+    body: JSON.stringify({ error: "Hiányzó API kulcsok" })
    };
   }
 
@@ -47,15 +44,7 @@ exports.handler = async function () {
   const season = getSeasonStartYearUtc();
 
   const LEAGUE_STRENGTH = {
-   CL: 1.0,
-   PL: 1.0,
-   PD: 0.97,
-   BL1: 0.96,
-   SA: 0.95,
-   FL1: 0.93,
-   DED: 0.89,
-   WC: 1.0,
-   OTHERS: 0.9
+   CL: 1.0, PL: 1.0, PD: 0.97, BL1: 0.96, SA: 0.95, FL1: 0.93, DED: 0.89, WC: 1.0, OTHERS: 0.9
   };
 
   function getLeagueStrength(code) {
@@ -64,10 +53,7 @@ exports.handler = async function () {
 
   function normalizeFormArray(value) {
    if (!Array.isArray(value)) return [];
-   return value
-    .map((x) => String(x || "").toUpperCase())
-    .filter((x) => ["GY", "D", "V"].includes(x))
-    .slice(0, 5);
+   return value.map((x) => String(x || "").toUpperCase()).filter((x) => ["GY", "D", "V"].includes(x)).slice(0, 5);
   }
 
   async function fetchJson(url, options = {}) {
@@ -92,16 +78,10 @@ exports.handler = async function () {
 
   for (const match of todayMatches || []) {
    if (match.home_team_id) {
-    teamsMap.set(match.home_team_id, {
-     team_id: match.home_team_id,
-     team_name: match.home_team_name
-    });
+    teamsMap.set(match.home_team_id, { team_id: match.home_team_id, team_name: match.home_team_name });
    }
    if (match.away_team_id) {
-    teamsMap.set(match.away_team_id, {
-     team_id: match.away_team_id,
-     team_name: match.away_team_name
-    });
+    teamsMap.set(match.away_team_id, { team_id: match.away_team_id, team_name: match.away_team_name });
    }
   }
 
@@ -141,13 +121,10 @@ exports.handler = async function () {
   for (const team of teams) {
    const todayCache = todayCacheByTeam.get(team.team_id);
    const latestCache = latestSeasonCacheByTeam.get(team.team_id);
-
    const todayForm = normalizeFormArray(todayCache?.last_5_form);
    const latestForm = normalizeFormArray(latestCache?.last_5_form);
 
-   if (todayCache && todayForm.length >= 5) {
-    continue;
-   }
+   if (todayCache && todayForm.length >= 5) continue;
 
    if (latestCache && latestForm.length >= 5) {
     const { id, ...copyRow } = latestCache;
@@ -165,113 +142,23 @@ exports.handler = async function () {
   }
 
   if (rowsToCopy.length > 0) {
-   const { error: copyError } = await supabase
-    .from("team_form_cache")
-    .upsert(rowsToCopy, { onConflict: "season,team_id" });
+   const { error: copyError } = await supabase.from("team_form_cache").upsert(rowsToCopy, { onConflict: "season,team_id" });
    if (copyError) throw copyError;
   }
 
   const batch = teamsToFetch.slice(0, 4);
 
-// HIBRID ADATLEKÉRŐ FÜGGVÉNY (Elsődleges + Biztonsági API)
-  // HIBRID ADATLEKÉRŐ FÜGGVÉNY (Elsődleges + Biztonsági RapidAPI Sofascore)
-  async function getRecentFinishedMatchesHybrid(team) {
-    let matches = [];
-    
-    // 1. Próba az elsődleges API-n (Klubcsapatoknak tökéletes)
-    try {
-      const data = await fetchJson(
-        `${API_BASE}/teams/${team.team_id}/matches?status=FINISHED&limit=40`,
-        { headers: { "X-Auth-Token": footballToken } }
-      );
-      matches = data.matches || [];
-    } catch (e) {
-      console.error("Elsődleges API hiba a következőnél:", team.team_name, e.message);
-    }
-
-    // Ha megvan a kellő statisztika, egyből visszaadjuk
-    if (matches.length >= 5) {
-      return matches;
-    }
-
-    // 2. Biztonsági háló: Ha üres a lista, jön a RapidAPI Sofascore!
-    console.log(`Váltás a biztonsági RapidAPI Sofascore-ra a(z) ${team.team_name} csapathoz...`);
-    try {
-      // RapidAPI Sofascore Kulcs és Host beállítása a képed alapján
-      const rapidApiKey = "adf55287c3msh42f33351578ad72p1b697fjsn519eb160df58";
-      const rapidApiHost = "sofascore.p.rapidapi.com";
-
-      // Névfordító a Sofascore nyelvére (A Sofascore finnyás a nevekre)
-      const nameMap = {
-        "United States": "USA",
-        "Bosnia-Herzegovina": "Bosnia & Herzegovina",
-        "South Korea": "South Korea",
-        "Czech Republic": "Czechia" // A Sofascore a cseheket Czechia néven ismeri
-      };
-      const searchName = nameMap[team.team_name] || team.team_name;
-
-      // 1. Lépés: Csapat keresése a Sofascore adatbázisában
-      const searchUrl = `https://sofascore.p.rapidapi.com/teams/search?name=${encodeURIComponent(searchName)}`;
-      const searchRes = await fetch(searchUrl, {
-        headers: {
-          "x-rapidapi-key": rapidApiKey,
-          "x-rapidapi-host": rapidApiHost
-        }
-      });
-      const searchData = await searchRes.json();
-
-      if (!searchData.data || searchData.data.length === 0) {
-        return matches; // Nem találtuk meg a csapatot
-      }
-
-      // Okos szűrés: Megkeressük a válogatottat (national team)
-      let correctTeam = searchData.data.find(r => r.national === true);
-      if (!correctTeam) {
-          correctTeam = searchData.data[0];
-      }
-
-      const teamId = correctTeam.id;
-
-      // 2. Lépés: Legutóbbi meccsek letöltése a csapat ID-ja alapján
-      // Késleltetés, hogy ne terheljük túl az 500-as limitet másodpercenként
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const eventsUrl = `https://sofascore.p.rapidapi.com/teams/get-last-matches?teamId=${teamId}`;
-      const eventsRes = await fetch(eventsUrl, {
-        headers: {
-          "x-rapidapi-key": rapidApiKey,
-          "x-rapidapi-host": rapidApiHost
-        }
-      });
-      const eventsData = await eventsRes.json();
-
-      if (!eventsData.data || !eventsData.data.events) return matches;
-
-      // 3. Lépés: Lefordítjuk a Sofascore adatait a te adatbázisod nyelvére
-      const mappedMatches = eventsData.data.events
-        .filter(e => e.status && e.status.type === 'finished') // Csak a befejezettek
-        .map(e => {
-          const isHome = e.homeTeam.id === teamId;
-          const homeGoals = e.homeScore?.current ?? 0;
-          const awayGoals = e.awayScore?.current ?? 0;
-          const timestamp = e.startTimestamp * 1000; // Unix másodperc átalakítása
-
-          return {
-            utcDate: new Date(timestamp).toISOString(),
-            homeTeam: { id: isHome ? team.team_id : 'other' },
-            awayTeam: { id: !isHome ? team.team_id : 'other' },
-            score: {
-              fullTime: { home: homeGoals, away: awayGoals }
-            },
-            competition: { code: 'WC' } // Mags szorzót kapnak
-          };
-      });
-
-      return mappedMatches;
-    } catch (e) {
-      console.error("Biztonsági API hiba a következőnél:", team.team_name, e.message);
-      return matches;
-    }
+  // EREDETI: Csak a football-data.org-ot hívjuk
+  async function getRecentFinishedMatches(team) {
+   try {
+    const data = await fetchJson(`${API_BASE}/teams/${team.team_id}/matches?status=FINISHED&limit=40`, {
+     headers: { "X-Auth-Token": footballToken }
+    });
+    return data.matches || [];
+   } catch (e) {
+    console.error("Hiba a következőnél:", team.team_name, e.message);
+    return [];
+   }
   }
 
   function weightedAverage(values, fallback = 0) {
@@ -299,10 +186,7 @@ exports.handler = async function () {
   }
 
   function buildTeamFormRow(team, matches) {
-   const sortedMatches = [...matches].sort(
-    (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
-   );
-
+   const sortedMatches = [...matches].sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime());
    const homeMatches = sortedMatches.filter((m) => m.homeTeam?.id === team.team_id).slice(0, 10);
    const awayMatches = sortedMatches.filter((m) => m.awayTeam?.id === team.team_id).slice(0, 10);
    const last10AllMatches = sortedMatches.slice(0, 10);
@@ -314,7 +198,6 @@ exports.handler = async function () {
     if (!isHome && !isAway) return null;
     const goalsFor = isHome ? match.score?.fullTime?.home : match.score?.fullTime?.away;
     const goalsAgainst = isHome ? match.score?.fullTime?.away : match.score?.fullTime?.home;
-
     if (goalsFor == null || goalsAgainst == null) return null;
     if (goalsFor > goalsAgainst) return "GY";
     if (goalsFor === goalsAgainst) return "D";
@@ -329,10 +212,8 @@ exports.handler = async function () {
      const goalsAgainst = isHome ? (m.score?.fullTime?.away ?? 0) : (m.score?.fullTime?.home ?? 0);
      const competitionCode = m.competition?.code || "OTHERS";
      const leagueStrength = getLeagueStrength(competitionCode);
-
      return {
-      goalsFor,
-      goalsAgainst,
+      goalsFor, goalsAgainst,
       over25: goalsFor + goalsAgainst >= 3 ? 1 : 0,
       btts: goalsFor > 0 && goalsAgainst > 0 ? 1 : 0,
       win: goalsFor > goalsAgainst ? 1 : 0,
@@ -348,10 +229,8 @@ exports.handler = async function () {
      const isHome = m.homeTeam?.id === team.team_id;
      const goalsFor = isHome ? (m.score?.fullTime?.home ?? 0) : (m.score?.fullTime?.away ?? 0);
      const goalsAgainst = isHome ? (m.score?.fullTime?.away ?? 0) : (m.score?.fullTime?.home ?? 0);
-
      return {
-      goalsFor,
-      goalsAgainst,
+      goalsFor, goalsAgainst,
       over25: goalsFor + goalsAgainst >= 3 ? 1 : 0,
       btts: goalsFor > 0 && goalsAgainst > 0 ? 1 : 0,
       win: goalsFor > goalsAgainst ? 1 : 0,
@@ -367,11 +246,7 @@ exports.handler = async function () {
    const recentAllStats = mapAllStats(recentAllMatches);
    const combinedStats = [...homeStats, ...awayStats];
 
-   const avgLeagueStrength = weightedAverage(
-    combinedStats.map((x) => x.leagueStrength ?? 0.9),
-    0.9
-   );
-
+   const avgLeagueStrength = weightedAverage(combinedStats.map((x) => x.leagueStrength ?? 0.9), 0.9);
    const lastFinishedMatchDate = sortedMatches.length > 0 ? sortedMatches[0].utcDate : null;
 
    return {
@@ -416,8 +291,7 @@ exports.handler = async function () {
   const fetchedTeams = [];
 
   for (const team of batch) {
-   // Itt hívjuk meg az új, Hibrid függvényünket!
-   const recentMatches = await getRecentFinishedMatchesHybrid(team);
+   const recentMatches = await getRecentFinishedMatches(team);
    const row = buildTeamFormRow(team, recentMatches);
 
    fetchedRows.push(row);
@@ -433,9 +307,7 @@ exports.handler = async function () {
   }
 
   if (fetchedRows.length > 0) {
-   const { error: upsertError } = await supabase
-    .from("team_form_cache")
-    .upsert(fetchedRows, { onConflict: "season,team_id" });
+   const { error: upsertError } = await supabase.from("team_form_cache").upsert(fetchedRows, { onConflict: "season,team_id" });
    if (upsertError) throw upsertError;
   }
 
@@ -457,9 +329,7 @@ exports.handler = async function () {
   return {
    statusCode: 500,
    headers: { "content-type": "application/json" },
-   body: JSON.stringify({
-    error: error.message || "Ismeretlen hiba"
-   })
+   body: JSON.stringify({ error: error.message || "Ismeretlen hiba" })
   };
  }
 };
