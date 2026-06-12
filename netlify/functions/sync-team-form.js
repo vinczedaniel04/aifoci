@@ -173,7 +173,7 @@ exports.handler = async function () {
 
   const batch = teamsToFetch.slice(0, 4);
 
-  // HIBRID ADATLEKÉRŐ FÜGGVÉNY (Elsődleges + Biztonsági API)
+// HIBRID ADATLEKÉRŐ FÜGGVÉNY (Elsődleges + Biztonsági API)
   async function getRecentFinishedMatchesHybrid(team) {
     let matches = [];
     
@@ -196,8 +196,17 @@ exports.handler = async function () {
     // 2. Biztonsági háló: Ha üres a lista (Válogatottak), jön az API-Football!
     console.log(`Váltás a biztonsági API-ra a(z) ${team.team_name} csapathoz...`);
     try {
-      // Csapat keresése név alapján
-      const searchUrl = `https://v3.football.api-sports.io/teams?search=${encodeURIComponent(team.team_name)}`;
+      // Névfordító a trükkös válogatottakhoz (Kiegészíthető később is)
+      const nameMap = {
+        "United States": "USA",
+        "Bosnia-Herzegovina": "Bosnia",
+        "South Korea": "South Korea",
+        "Czech Republic": "Czech Republic"
+      };
+      const searchName = nameMap[team.team_name] || team.team_name;
+
+      // Csapat keresése az okosított névvel
+      const searchUrl = `https://v3.football.api-sports.io/teams?search=${encodeURIComponent(searchName)}`;
       const searchRes = await fetch(searchUrl, {
         headers: { "x-apisports-key": apiFootballKey }
       });
@@ -207,7 +216,15 @@ exports.handler = async function () {
         return matches; // Nem találtuk a biztonsági API-ban sem
       }
 
-      const apiTeamId = searchData.response[0].team.id;
+      // Okos szűrés: Megkeressük a listából a kifejezett Nemzeti Válogatottat!
+      let correctTeam = searchData.response.find(r => r.team.national === true);
+      
+      // Ha véletlenül nincs national flag, marad a legelső találat
+      if (!correctTeam) {
+          correctTeam = searchData.response[0];
+      }
+
+      const apiTeamId = correctTeam.team.id;
 
       // Legutóbbi befejezett meccsek letöltése a megtalált azonosítóval
       const fixUrl = `https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&last=30`;
