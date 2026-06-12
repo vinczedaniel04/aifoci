@@ -250,7 +250,7 @@ exports.handler = async function () {
             score: {
               fullTime: { home: homeGoals, away: awayGoals }
             },
-            competition: { code: 'WC' } // Magas szorzót kapnak az itteni adatok (1.0)
+            competition: { code: 'WC' } // Mag szorzót kapnak az itteni adatok (1.0)
           };
       });
 
