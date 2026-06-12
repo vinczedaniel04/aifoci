@@ -5,16 +5,15 @@ exports.handler = async function () {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const footballToken = process.env.FOOTBALL_DATA_API_KEY;
+  
+  // Az új API kulcsod biztonságosan beépítve a hibrid rendszerhez
+  const apiFootballKey = process.env.API_FOOTBALL_KEY || "c6ed43e5d41d4020985d034da95fb830";
 
   if (!supabaseUrl || !supabaseKey || !footballToken) {
    return {
     statusCode: 500,
-    headers: {
-     "content-type": "application/json"
-    },
-    body: JSON.stringify({
-     error: "Hiányzó SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY vagy FOOTBALL_DATA_API_KEY"
-    })
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ error: "Hiányzó alapvető API kulcsok" })
    };
   }
 
@@ -65,25 +64,18 @@ exports.handler = async function () {
 
   function normalizeFormArray(value) {
    if (!Array.isArray(value)) return [];
-
    return value
     .map((x) => String(x || "").toUpperCase())
     .filter((x) => ["GY", "D", "V"].includes(x))
     .slice(0, 5);
   }
 
-  async function fetchJson(url) {
-   const response = await fetch(url, {
-    headers: {
-     "X-Auth-Token": footballToken
-    }
-   });
-
+  async function fetchJson(url, options = {}) {
+   const response = await fetch(url, options);
    if (!response.ok) {
     const text = await response.text();
     throw new Error(`${response.status} ${text}`);
    }
-
    return await response.json();
   }
 
@@ -105,7 +97,6 @@ exports.handler = async function () {
      team_name: match.home_team_name
     });
    }
-
    if (match.away_team_id) {
     teamsMap.set(match.away_team_id, {
      team_id: match.away_team_id,
@@ -119,18 +110,8 @@ exports.handler = async function () {
   if (teams.length === 0) {
    return {
     statusCode: 200,
-    headers: {
-     "content-type": "application/json"
-    },
-    body: JSON.stringify({
-     ok: true,
-     copied_from_cache: 0,
-     fetched_new: 0,
-     remaining_new_teams: 0,
-     total_today_teams: 0,
-     season,
-     match_day: matchDay
-    })
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ok: true, total_today_teams: 0, match_day: matchDay })
    };
   }
 
@@ -149,7 +130,6 @@ exports.handler = async function () {
    if (!latestSeasonCacheByTeam.has(row.team_id)) {
     latestSeasonCacheByTeam.set(row.team_id, row);
    }
-
    if (row.match_day === matchDay && !todayCacheByTeam.has(row.team_id)) {
     todayCacheByTeam.set(row.team_id, row);
    }
@@ -171,7 +151,6 @@ exports.handler = async function () {
 
    if (latestCache && latestForm.length >= 5) {
     const { id, ...copyRow } = latestCache;
-
     rowsToCopy.push({
      ...copyRow,
      match_day: matchDay,
@@ -189,46 +168,103 @@ exports.handler = async function () {
    const { error: copyError } = await supabase
     .from("team_form_cache")
     .upsert(rowsToCopy, { onConflict: "season,team_id" });
-
    if (copyError) throw copyError;
   }
 
   const batch = teamsToFetch.slice(0, 4);
 
-  async function getRecentFinishedMatches(teamId) {
-   const data = await fetchJson(
-    `${API_BASE}/teams/${teamId}/matches?status=FINISHED&limit=40`
-   );
-   return data.matches || [];
+  // HIBRID ADATLEKÉRŐ FÜGGVÉNY (Elsődleges + Biztonsági API)
+  async function getRecentFinishedMatchesHybrid(team) {
+    let matches = [];
+    
+    // 1. Próba az elsődleges API-n (Klubcsapatoknak tökéletes)
+    try {
+      const data = await fetchJson(
+        `${API_BASE}/teams/${team.team_id}/matches?status=FINISHED&limit=40`,
+        { headers: { "X-Auth-Token": footballToken } }
+      );
+      matches = data.matches || [];
+    } catch (e) {
+      console.error("Elsődleges API hiba a következőnél:", team.team_name, e.message);
+    }
+
+    // Ha megvan a kellő statisztika, egyből visszaadjuk
+    if (matches.length >= 5) {
+      return matches;
+    }
+
+    // 2. Biztonsági háló: Ha üres a lista (Válogatottak), jön az API-Football!
+    console.log(`Váltás a biztonsági API-ra a(z) ${team.team_name} csapathoz...`);
+    try {
+      // Csapat keresése név alapján
+      const searchUrl = `https://v3.football.api-sports.io/teams?search=${encodeURIComponent(team.team_name)}`;
+      const searchRes = await fetch(searchUrl, {
+        headers: { "x-apisports-key": apiFootballKey }
+      });
+      const searchData = await searchRes.json();
+
+      if (!searchData.response || searchData.response.length === 0) {
+        return matches; // Nem találtuk a biztonsági API-ban sem
+      }
+
+      const apiTeamId = searchData.response[0].team.id;
+
+      // Legutóbbi befejezett meccsek letöltése a megtalált azonosítóval
+      const fixUrl = `https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&last=30`;
+      const fixRes = await fetch(fixUrl, {
+        headers: { "x-apisports-key": apiFootballKey }
+      });
+      const fixData = await fixRes.json();
+
+      if (!fixData.response) return matches;
+
+      // Lefordítjuk az új API adatait a te adatbázisod (a régi API) nyelvére
+      const mappedMatches = fixData.response
+        .filter(f => ['FT', 'AET', 'PEN'].includes(f.fixture.status.short)) // Csak a befejezettek
+        .map(f => {
+          const isHome = f.teams.home.id === apiTeamId;
+          const homeGoals = f.goals.home ?? 0;
+          const awayGoals = f.goals.away ?? 0;
+
+          return {
+            utcDate: f.fixture.date,
+            homeTeam: { id: isHome ? team.team_id : 'other' },
+            awayTeam: { id: !isHome ? team.team_id : 'other' },
+            score: {
+              fullTime: { home: homeGoals, away: awayGoals }
+            },
+            competition: { code: 'WC' } // Magas szorzót kapnak az itteni adatok (1.0)
+          };
+      });
+
+      return mappedMatches;
+    } catch (e) {
+      console.error("Biztonsági API hiba a következőnél:", team.team_name, e.message);
+      return matches;
+    }
   }
 
   function weightedAverage(values, fallback = 0) {
    if (!values.length) return fallback;
-
    let weightedSum = 0;
    let totalWeight = 0;
-
    for (let i = 0; i < values.length; i += 1) {
     const weight = values.length - i;
     weightedSum += values[i] * weight;
     totalWeight += weight;
    }
-
    return Number((weightedSum / totalWeight).toFixed(2));
   }
 
   function weightedRate(values, fallback = 0) {
    if (!values.length) return fallback;
-
    let weightedSum = 0;
    let totalWeight = 0;
-
    for (let i = 0; i < values.length; i += 1) {
     const weight = values.length - i;
     weightedSum += values[i] * weight;
     totalWeight += weight;
    }
-
    return Number((((weightedSum / totalWeight) || 0) * 100).toFixed(2));
   }
 
@@ -237,54 +273,31 @@ exports.handler = async function () {
     (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
    );
 
-   const homeMatches = sortedMatches
-    .filter((m) => m.homeTeam?.id === team.team_id)
-    .slice(0, 10);
-
-   const awayMatches = sortedMatches
-    .filter((m) => m.awayTeam?.id === team.team_id)
-    .slice(0, 10);
-
+   const homeMatches = sortedMatches.filter((m) => m.homeTeam?.id === team.team_id).slice(0, 10);
+   const awayMatches = sortedMatches.filter((m) => m.awayTeam?.id === team.team_id).slice(0, 10);
    const last10AllMatches = sortedMatches.slice(0, 10);
    const recentAllMatches = sortedMatches.slice(0, 5);
 
    function mapFormResult(match) {
     const isHome = match.homeTeam?.id === team.team_id;
     const isAway = match.awayTeam?.id === team.team_id;
-
     if (!isHome && !isAway) return null;
-
-    const goalsFor = isHome
-     ? match.score?.fullTime?.home
-     : match.score?.fullTime?.away;
-
-    const goalsAgainst = isHome
-     ? match.score?.fullTime?.away
-     : match.score?.fullTime?.home;
+    const goalsFor = isHome ? match.score?.fullTime?.home : match.score?.fullTime?.away;
+    const goalsAgainst = isHome ? match.score?.fullTime?.away : match.score?.fullTime?.home;
 
     if (goalsFor == null || goalsAgainst == null) return null;
-
     if (goalsFor > goalsAgainst) return "GY";
     if (goalsFor === goalsAgainst) return "D";
     return "V";
    }
 
-   const last5Form = recentAllMatches
-    .map(mapFormResult)
-    .filter(Boolean)
-    .slice(0, 5);
+   const last5Form = recentAllMatches.map(mapFormResult).filter(Boolean).slice(0, 5);
 
    function mapStats(matchList, isHome) {
     return matchList.map((m) => {
-     const goalsFor = isHome
-      ? (m.score?.fullTime?.home ?? 0)
-      : (m.score?.fullTime?.away ?? 0);
-
-     const goalsAgainst = isHome
-      ? (m.score?.fullTime?.away ?? 0)
-      : (m.score?.fullTime?.home ?? 0);
-
-     const competitionCode = m.competition?.code || "";
+     const goalsFor = isHome ? (m.score?.fullTime?.home ?? 0) : (m.score?.fullTime?.away ?? 0);
+     const goalsAgainst = isHome ? (m.score?.fullTime?.away ?? 0) : (m.score?.fullTime?.home ?? 0);
+     const competitionCode = m.competition?.code || "OTHERS";
      const leagueStrength = getLeagueStrength(competitionCode);
 
      return {
@@ -303,14 +316,8 @@ exports.handler = async function () {
    function mapAllStats(matchList) {
     return matchList.map((m) => {
      const isHome = m.homeTeam?.id === team.team_id;
-
-     const goalsFor = isHome
-      ? (m.score?.fullTime?.home ?? 0)
-      : (m.score?.fullTime?.away ?? 0);
-
-     const goalsAgainst = isHome
-      ? (m.score?.fullTime?.away ?? 0)
-      : (m.score?.fullTime?.home ?? 0);
+     const goalsFor = isHome ? (m.score?.fullTime?.home ?? 0) : (m.score?.fullTime?.away ?? 0);
+     const goalsAgainst = isHome ? (m.score?.fullTime?.away ?? 0) : (m.score?.fullTime?.home ?? 0);
 
      return {
       goalsFor,
@@ -328,7 +335,6 @@ exports.handler = async function () {
    const awayStats = mapStats(awayMatches, false);
    const last10Stats = mapAllStats(last10AllMatches);
    const recentAllStats = mapAllStats(recentAllMatches);
-
    const combinedStats = [...homeStats, ...awayStats];
 
    const avgLeagueStrength = weightedAverage(
@@ -336,53 +342,40 @@ exports.handler = async function () {
     0.9
    );
 
-   const lastFinishedMatchDate =
-    sortedMatches.length > 0 ? sortedMatches[0].utcDate : null;
+   const lastFinishedMatchDate = sortedMatches.length > 0 ? sortedMatches[0].utcDate : null;
 
    return {
     match_day: matchDay,
     season,
     team_id: team.team_id,
     team_name: team.team_name,
-
     last_5_count: last5Form.length,
     last_5_form: last5Form,
-
     home_last_10_count: homeMatches.length,
     away_last_10_count: awayMatches.length,
-
     last10_avg_goals_for: weightedAverage(last10Stats.map((x) => x.goalsFor), 1.3),
     last10_avg_goals_against: weightedAverage(last10Stats.map((x) => x.goalsAgainst), 1.2),
     last10_over25_rate: weightedRate(last10Stats.map((x) => x.over25), 0),
     last10_btts_rate: weightedRate(last10Stats.map((x) => x.btts), 0),
-
     avg_goals_for: weightedAverage(combinedStats.map((x) => x.goalsFor), 1.2),
     avg_goals_against: weightedAverage(combinedStats.map((x) => x.goalsAgainst), 1.2),
-
     avg_goals_for_home: weightedAverage(homeStats.map((x) => x.goalsFor), 1.2),
     avg_goals_against_home: weightedAverage(homeStats.map((x) => x.goalsAgainst), 1.1),
-
     avg_goals_for_away: weightedAverage(awayStats.map((x) => x.goalsFor), 1.0),
     avg_goals_against_away: weightedAverage(awayStats.map((x) => x.goalsAgainst), 1.1),
-
     wins_last_5: recentAllStats.filter((x) => x.win).length,
     draws_last_5: recentAllStats.filter((x) => x.draw).length,
     losses_last_5: recentAllStats.filter((x) => x.loss).length,
-
     home_win_rate: weightedRate(homeStats.map((x) => x.win), 0),
     home_draw_rate: weightedRate(homeStats.map((x) => x.draw), 0),
     home_loss_rate: weightedRate(homeStats.map((x) => x.loss), 0),
-
     away_win_rate: weightedRate(awayStats.map((x) => x.win), 0),
     away_draw_rate: weightedRate(awayStats.map((x) => x.draw), 0),
     away_loss_rate: weightedRate(awayStats.map((x) => x.loss), 0),
-
     home_over25_rate: weightedRate(homeStats.map((x) => x.over25), 0),
     away_over25_rate: weightedRate(awayStats.map((x) => x.over25), 0),
-
     home_btts_rate: weightedRate(homeStats.map((x) => x.btts), 0),
     away_btts_rate: weightedRate(awayStats.map((x) => x.btts), 0),
-
     source_league_strength: avgLeagueStrength,
     last_finished_match_date: lastFinishedMatchDate,
     updated_at: new Date().toISOString()
@@ -393,7 +386,8 @@ exports.handler = async function () {
   const fetchedTeams = [];
 
   for (const team of batch) {
-   const recentMatches = await getRecentFinishedMatches(team.team_id);
+   // Itt hívjuk meg az új, Hibrid függvényünket!
+   const recentMatches = await getRecentFinishedMatchesHybrid(team);
    const row = buildTeamFormRow(team, recentMatches);
 
    fetchedRows.push(row);
@@ -412,15 +406,12 @@ exports.handler = async function () {
    const { error: upsertError } = await supabase
     .from("team_form_cache")
     .upsert(fetchedRows, { onConflict: "season,team_id" });
-
    if (upsertError) throw upsertError;
   }
 
   return {
    statusCode: 200,
-   headers: {
-    "content-type": "application/json"
-   },
+   headers: { "content-type": "application/json" },
    body: JSON.stringify({
     ok: true,
     copied_from_cache: rowsToCopy.length,
@@ -435,9 +426,7 @@ exports.handler = async function () {
  } catch (error) {
   return {
    statusCode: 500,
-   headers: {
-    "content-type": "application/json"
-   },
+   headers: { "content-type": "application/json" },
    body: JSON.stringify({
     error: error.message || "Ismeretlen hiba"
    })
