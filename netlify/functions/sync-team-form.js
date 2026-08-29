@@ -148,10 +148,19 @@ exports.handler = async function () {
 
   const batch = teamsToFetch.slice(0, 4);
 
-  // EREDETI: Csak a football-data.org-ot hívjuk
+  // JAVÍTOTT: Dátum intervallumot adunk meg, hogy áthidalja a szezonváltást (1 évet megyünk vissza)
   async function getRecentFinishedMatches(team) {
    try {
-    const data = await fetchJson(`${API_BASE}/teams/${team.team_id}/matches?status=FINISHED&limit=40`, {
+    const today = new Date();
+    const past = new Date();
+    past.setFullYear(past.getFullYear() - 1); 
+
+    const dateTo = today.toISOString().split("T")[0];
+    const dateFrom = past.toISOString().split("T")[0];
+
+    const url = `${API_BASE}/teams/${team.team_id}/matches?status=FINISHED&dateFrom=${dateFrom}&dateTo=${dateTo}&limit=40`;
+
+    const data = await fetchJson(url, {
      headers: { "X-Auth-Token": footballToken }
     });
     return data.matches || [];

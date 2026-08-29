@@ -121,16 +121,9 @@ exports.handler = async function () {
 
   const hasAnyTodayInDb = existingRows.length > 0;
 
-  const dbCompetitionSet = new Set(
-   existingRows
-    .map((row) => row.competition_code)
-    .filter(Boolean)
-  );
-
-  const competitionsToFetch =
-   dbCompetitionSet.size > 0
-    ? Array.from(dbCompetitionSet)
-    : DEFAULT_COMPETITIONS;
+  // JAVÍTVA: Eltávolítva a "túlokoskodó" szűrés. 
+  // Mindig lekérjük mind a 7 ligát a DEFAULT_COMPETITIONS tömbből.
+  const competitionsToFetch = DEFAULT_COMPETITIONS;
 
   let allMatches = [];
   const usedCompetitions = [];
