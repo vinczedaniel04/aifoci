@@ -124,8 +124,9 @@ exports.handler = async function () {
    const todayForm = normalizeFormArray(todayCache?.last_5_form);
    const latestForm = normalizeFormArray(latestCache?.last_5_form);
 
-   if (todayCache && todayForm.length >= 5) continue;
-
+// Ha ma már lekérdeztük (akár megvan az 5 meccs, akár nem), ugorjuk át, ne okozzon dugót!
+   if (todayCache) continue;
+   
    if (latestCache && latestForm.length >= 5) {
     const { id, ...copyRow } = latestCache;
     rowsToCopy.push({
