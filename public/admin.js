@@ -306,7 +306,6 @@ function wireAdminToggles() {
   });
  });
 }
-
 function wireRunButtons() {
  const buttons = document.querySelectorAll("[data-run-target]");
  const output = document.getElementById("admin-run-output");
@@ -330,11 +329,22 @@ function wireRunButtons() {
     });
 
     const data = await response.json();
+    
+    // 1. Elmentjük a kiírandó szöveget egy változóba
+    const resultText = JSON.stringify(data, null, 2);
 
-    output.textContent = JSON.stringify(data, null, 2);
+    // 2. Kiírjuk a régi dobozba
+    output.textContent = resultText;
 
     if (response.ok) {
+     // 3. Frissítjük az oldalt (ez letörli a dobozt)
      await loadAdminPanel();
+     
+     // 4. JAVÍTÁS: Megkeressük az ÚJ dobozt, és visszaírjuk bele a szöveget!
+     const newOutput = document.getElementById("admin-run-output");
+     if (newOutput) {
+         newOutput.textContent = resultText;
+     }
     }
    } catch (error) {
     output.textContent = error.message || "Hiba történt.";
