@@ -86,6 +86,7 @@ function renderModelSettings(settings) {
       ${renderSettingRow("Hazai pálya előny", num(settings.home_advantage))}
       ${renderSettingRow("Over 2.5 threshold", num(Number(settings.over25_threshold) * 100, 2), "%")}
       ${renderSettingRow("BTTS threshold", num(Number(settings.btts_threshold) * 100, 2), "%")}
+      ${renderSettingRow("1. Félidő Over 0.5 threshold", num(Number(settings.ht_over05_threshold ?? 0.68) * 100, 2), "%")}
       ${renderSettingRow("Minimum összgól Overhez", num(settings.min_total_goals_for_over, 3))}
       ${renderSettingRow("Minimum csapatgól BTTS-hez", num(settings.min_team_goal_for_btts, 3))}
       ${renderSettingRow("Mean regression", num(settings.mean_regression_strength))}
@@ -140,7 +141,9 @@ function renderTrainingLog(log, index) {
             ${renderSettingRow("1X2 találati arány", pct(metrics?.overall?.winner_rate))}
             ${renderSettingRow("Over találati arány", pct(metrics?.overall?.over_rate))}
             ${renderSettingRow("BTTS találati arány", pct(metrics?.overall?.btts_rate))}
+            ${renderSettingRow("1. Félidő Over találat", pct(metrics?.overall?.ht_over_rate))}
             ${renderSettingRow("Hazai favorit miss", pct(metrics?.miss_breakdown?.home_favorite_miss_rate))}
+            ${renderSettingRow("1. Félidő Over miss", pct(metrics?.miss_breakdown?.ht_over_miss_rate))}
           </div>
 
           <div class="admin-change-list">
@@ -306,6 +309,7 @@ function wireAdminToggles() {
   });
  });
 }
+
 function wireRunButtons() {
  const buttons = document.querySelectorAll("[data-run-target]");
  const output = document.getElementById("admin-run-output");
@@ -329,18 +333,12 @@ function wireRunButtons() {
     });
 
     const data = await response.json();
-    
-    // 1. Elmentjük a kiírandó szöveget egy változóba
     const resultText = JSON.stringify(data, null, 2);
 
-    // 2. Kiírjuk a régi dobozba
     output.textContent = resultText;
 
     if (response.ok) {
-     // 3. Frissítjük az oldalt (ez letörli a dobozt)
      await loadAdminPanel();
-     
-     // 4. JAVÍTÁS: Megkeressük az ÚJ dobozt, és visszaírjuk bele a szöveget!
      const newOutput = document.getElementById("admin-run-output");
      if (newOutput) {
          newOutput.textContent = resultText;
