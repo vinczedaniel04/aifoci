@@ -21,8 +21,7 @@ exports.handler = async function () {
    "PD",
    "BL1",
    "SA",
-   "FL1",
-   "WC"
+   "FL1"
   ];
 
   function getLogicalDates() {
