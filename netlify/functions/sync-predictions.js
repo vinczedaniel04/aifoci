@@ -113,6 +113,7 @@ exports.handler = async function () {
 
    const over25Threshold = Number(settings.over25_threshold ?? 0.58);
    const bttsThreshold = Number(settings.btts_threshold ?? 0.58);
+   const htOverThreshold = Number(settings.ht_over05_threshold ?? 0.68) * 100;
    const minTotalGoalsForOver = Number(settings.min_total_goals_for_over ?? 2.5);
    const minTeamGoalForBtts = Number(settings.min_team_goal_for_btts ?? 0.90);
 
@@ -303,7 +304,7 @@ exports.handler = async function () {
     95
    );
 
-   const finalHtOver05Tip = predictedHtOver05Prob >= 68 ? "0,5 FELETT" : "0,5 ALATT";
+   const finalHtOver05Tip = predictedHtOver05Prob >= htOverThreshold ? "0,5 FELETT" : "0,5 ALATT";
 
    return {
     predicted_score: bestScore,
@@ -794,6 +795,14 @@ exports.handler = async function () {
     continue;
    }
 
+   const actualHtTotal = (match.half_time_home != null && match.half_time_away != null)
+    ? (match.half_time_home + match.half_time_away)
+    : null;
+
+   const ht_over05_hit = isFinished && actualHtTotal != null
+    ? (prediction.final_ht_over05_tip === "0,5 FELETT") === (actualHtTotal > 0)
+    : null;
+
    const predictionRow = {
     match_id: match.match_id,
     match_date: match.match_date,
@@ -846,6 +855,7 @@ exports.handler = async function () {
      ? (prediction.final_btts_tip === "IGEN") === actualBtts
      : null,
     winner_hit: isFinished ? prediction.predicted_1x2_pick === actual1x2 : null,
+    ht_over05_hit,
 
     updated_at: new Date().toISOString()
    };
@@ -888,7 +898,7 @@ exports.handler = async function () {
   for (const row of rowsToUpdateLocked) {
    const { data: existingRow, error: existingRowError } = await supabase
     .from("predictions_history")
-    .select("predicted_score, final_over25_tip, final_btts_tip, predicted_1x2_pick")
+    .select("predicted_score, final_over25_tip, final_btts_tip, final_ht_over05_tip, predicted_1x2_pick")
     .eq("match_id", row.match_id)
     .maybeSingle();
 
@@ -901,6 +911,7 @@ exports.handler = async function () {
    let over25_hit = null;
    let btts_hit = null;
    let winner_hit = null;
+   let ht_over05_hit = null;
 
    if (isFinishedLocked) {
     const actualScore = `${row.actual_home_goals ?? 0}-${row.actual_away_goals ?? 0}`;
@@ -915,6 +926,10 @@ exports.handler = async function () {
      actual1x2 = "AWAY";
     }
 
+    const actualHtTotal = (row.half_time_home != null && row.half_time_away != null)
+     ? (row.half_time_home + row.half_time_away)
+     : null;
+
     exact_hit = existingRow.predicted_score === actualScore;
     over25_hit = (existingRow.final_over25_tip === "2,5 FELETT") === (actualTotal > 2.5);
     btts_hit = (existingRow.final_btts_tip === "IGEN") === actualBtts;
@@ -922,6 +937,10 @@ exports.handler = async function () {
      existingRow.predicted_1x2_pick != null
       ? existingRow.predicted_1x2_pick === actual1x2
       : null;
+
+    if (actualHtTotal != null && existingRow.final_ht_over05_tip) {
+     ht_over05_hit = (existingRow.final_ht_over05_tip === "0,5 FELETT") === (actualHtTotal > 0);
+    }
    }
 
    const { error: updateError } = await supabase
@@ -941,6 +960,7 @@ exports.handler = async function () {
      over25_hit,
      btts_hit,
      winner_hit,
+     ht_over05_hit,
      predicted_ht_goals: row.predicted_ht_goals,
      predicted_ht_over05_probability: row.predicted_ht_over05_probability,
      final_ht_over05_tip: row.final_ht_over05_tip,
@@ -1001,6 +1021,7 @@ exports.handler = async function () {
      over25_hit: row.over25_hit,
      btts_hit: row.btts_hit,
      winner_hit: row.winner_hit,
+     ht_over05_hit: row.ht_over05_hit,
      updated_at: row.updated_at
     })
     .eq("match_id", row.match_id);
