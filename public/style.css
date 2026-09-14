@@ -18,7 +18,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: 'Inter', Arial, sans-serif; /* Picit modernebb font fallback */
+  font-family: 'Inter', Arial, sans-serif;
   color: var(--text);
   background:
     radial-gradient(circle at top, rgba(79, 141, 253, 0.08), transparent 35%),
@@ -245,26 +245,109 @@ header { text-align: center; margin: 0; padding: 0; border-bottom: 0; }
 .live-badge { background: rgba(248,113,113,0.1); color: var(--bad); border: 1px solid rgba(248,113,113,0.3); }
 .scheduled-badge { background: rgba(96,165,250,0.1); color: #93c5fd; border: 1px solid rgba(96,165,250,0.25); }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block; animation: pulseLive 1.5s infinite; }
-.teams-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 22px; font-weight: 900; margin-bottom: 12px; }
-.team-side { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
-.away-side { justify-content: flex-end; text-align: right; }
-.team-name-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
-.away-name-wrap { align-items: flex-end; }
-.team-name { word-break: break-word; line-height: 1.1; letter-spacing: -0.3px; }
-.team-logo { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
-.team-score { font-weight: 900; font-size: 26px; color: #fff; margin: 0 8px; min-width: 22px; text-align: center; }
-.vs-block { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 50px; }
-.vs { color: var(--muted); font-size: 14px; font-weight: 800; text-transform: uppercase; }
+
+/* TEAMS ROW: 3 oszlopos stabil elrendezés */
+.teams-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.team-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.away-side {
+  justify-content: flex-end;
+  text-align: right;
+}
+.team-name-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.away-name-wrap {
+  align-items: flex-end;
+}
+.team-name {
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.2;
+  word-break: break-word;
+}
+.team-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* KÖZÉPSŐ EREDMÉNY ÉS FÉLIDŐ SÁV */
+.vs-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 70px;
+  padding: 0 6px;
+}
+.score-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.team-score {
+  font-size: 24px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+}
+.vs {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.half-time-score {
+  font-size: 12px;
+  color: #9fb0c9;
+  font-weight: 700;
+  margin-top: 3px;
+  letter-spacing: 0.5px;
+}
+
 .time { color: var(--muted); margin-bottom: 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.3px; }
 
 .match-body { display: none; padding: 0 22px 22px; }
 .match-body.open { display: block; }
-.inline-team-form { display: flex; align-items: center; gap: 4px; min-height: 20px; flex-wrap: nowrap !important; }
+
+/* FORM BADGE-EK */
+.inline-team-form {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 18px;
+  flex-wrap: nowrap !important;
+}
 .inline-team-form.empty { font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase; }
 .form-badge {
-  min-width: 20px; height: 20px; border-radius: 6px;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 900; color: #fff;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 900;
+  color: #fff;
+  flex-shrink: 0;
 }
 .form-badge-win { background: #16a34a; }
 .form-badge-draw { background: #475569; }
@@ -395,37 +478,50 @@ header { text-align: center; margin: 0; padding: 0; border-bottom: 0; }
   .brand-header .top-nav { width: 100%; display: flex; margin-top: 12px; padding: 4px; gap: 4px; }
   .brand-header .top-nav-link { flex: 1; min-height: 34px; padding: 0 4px; font-size: 11px; white-space: nowrap; }
 
-  /* Kártya rácsok mobilon */
+  /* Kártya méretek mobilon */
   .match-card { margin: 10px 0; border-radius: 20px; }
   .match-header { padding: 14px; }
   .match-body { padding: 0 12px 14px; }
   
-  /* 1X2 kapszulák (Market Row) */
-  .market-row { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 6px !important; margin-bottom: 10px !important; }
-  .market-pill { min-height: 50px !important; padding: 6px 8px !important; border-radius: 12px !important; gap: 4px; }
-  .market-pill.draw { gap: 8px !important; }
-  .market-left, .market-right, .market-short { font-size: 15px !important; font-weight: 900; }
-  .market-logo { width: 22px !important; height: 22px !important; }
+  /* TEAMS ROW MOBILON: stabil rács, nem engedi egymásra csúszni az elemeket */
+  .teams-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+    gap: 6px !important;
+    align-items: center !important;
+    margin-bottom: 8px !important;
+  }
+  .team-side { gap: 6px !important; min-width: 0 !important; }
+  .away-side { justify-content: flex-end !important; }
+  .team-name-wrap { gap: 2px !important; min-width: 0 !important; }
+  .team-name { font-size: 12px !important; line-height: 1.15 !important; }
+  .team-logo { width: 20px !important; height: 20px !important; }
   
-  /* Statisztikai 3-as és 2-es grid (Compact & Detail) */
+  /* Középső mező mobilon */
+  .vs-block { min-width: 54px !important; padding: 0 2px !important; }
+  .team-score { font-size: 18px !important; }
+  .half-time-score { font-size: 10px !important; }
+  
+  /* Formakarikák mobilon: fixen 1 sor */
+  .inline-team-form { gap: 2px !important; min-height: 15px !important; flex-wrap: nowrap !important; }
+  .form-badge { min-width: 14px !important; height: 14px !important; font-size: 7px !important; line-height: 14px !important; border-radius: 3px !important; }
+
+  /* 1X2 kapszulák */
+  .market-row { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 6px !important; margin-bottom: 10px !important; }
+  .market-pill { min-height: 48px !important; padding: 6px 8px !important; border-radius: 12px !important; gap: 4px; }
+  .market-pill.draw { gap: 6px !important; }
+  .market-left, .market-right, .market-short { font-size: 14px !important; font-weight: 900; }
+  .market-logo { width: 20px !important; height: 20px !important; }
+  
+  /* Statisztikai 3-as grid */
   .compact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 6px !important; margin-bottom: 10px !important; }
   .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 6px !important; margin-bottom: 10px !important; }
-  .compact-box, .detail-box { padding: 10px 4px !important; border-radius: 12px !important; text-align: center; }
-  .compact-box .label, .detail-box .label { font-size: 9px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px !important; }
-  .compact-box strong, .detail-box strong { font-size: 15px !important; line-height: 1.1 !important; }
+  .compact-box, .detail-box { padding: 8px 4px !important; border-radius: 12px !important; text-align: center; }
+  .compact-box .label, .detail-box .label { font-size: 9px !important; margin-bottom: 3px !important; }
+  .compact-box strong, .detail-box strong { font-size: 14px !important; line-height: 1.1 !important; }
   
-  /* Formakarikák (GY, D, V) */
-  .inline-team-form { gap: 2px !important; min-height: 16px !important; flex-wrap: nowrap !important; }
-  .form-badge { min-width: 14px !important; height: 14px !important; padding: 0 !important; font-size: 7px !important; line-height: 14px !important; border-radius: 4px !important; flex-shrink: 0; }
-  
-  .teams-row { font-size: 18px; margin-bottom: 8px; }
-  .team-name { font-size: 12px; line-height: 1.2; }
-  .team-logo { width: 18px; height: 18px; }
-  .team-score { font-size: 20px; margin: 0 4px; }
-  .vs { font-size: 12px; }
   .time { font-size: 11px; }
 
-  /* Egyéb mobil méretcsökkentések */
   .ticket-panel { padding: 12px; }
   .ticket-toggle { font-size: 16px; }
   .ticket-pick { flex-direction: column; align-items: flex-start; padding: 10px; gap: 6px; }

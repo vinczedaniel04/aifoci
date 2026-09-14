@@ -321,13 +321,17 @@ function createMatchCard(item) {
  const isFinished = status === "FINISHED";
  const isLive = ["LIVE", "IN_PLAY", "PAUSED"].includes(status);
 
- const resultLine = isFinished
-  ? `<div class="time"><b>Végeredmény:</b> ${item.actual_home_goals ?? 0} - ${item.actual_away_goals ?? 0}</div>`
-  : `<div class="time">Kezdés: ${new Date(item.match_date).toLocaleString("hu-HU")}</div>`;
-
  const homeGoals = isFinished ? (item.actual_home_goals ?? 0) : (item.live_home ?? 0);
  const awayGoals = isFinished ? (item.actual_away_goals ?? 0) : (item.live_away ?? 0);
  const showScore = isFinished || isLive;
+
+ const htHome = item.half_time_home ?? null;
+ const htAway = item.half_time_away ?? null;
+ const hasHalfTime = htHome != null && htAway != null;
+
+ const resultLine = isFinished
+  ? `<div class="time"><b>Végeredmény:</b> ${homeGoals} - ${awayGoals} ${hasHalfTime ? `(${htHome}-${htAway})` : ""}</div>`
+  : `<div class="time">Kezdés: ${new Date(item.match_date).toLocaleString("hu-HU")}</div>`;
 
  const totalGoals = (
   Number(item.predicted_home_goals || 0) + Number(item.predicted_away_goals || 0)
@@ -394,13 +398,24 @@ function createMatchCard(item) {
  <span class="team-name">${item.home_team_name}</span>
  ${renderInlineTeamForm(item.home_form)}
  </div>
- ${showScore ? `<span class="team-score">${homeGoals}</span>` : ""}
  </div>
 
- <div class="vs-block"><div class="vs">vs</div></div>
+ <div class="vs-block">
+ ${
+  showScore
+   ? `
+ <div class="score-line">
+ <span class="team-score">${homeGoals}</span>
+ <span class="vs">:</span>
+ <span class="team-score">${awayGoals}</span>
+ </div>
+ ${hasHalfTime ? `<span class="half-time-score">(${htHome}-${htAway})</span>` : ""}
+ `
+   : `<div class="vs">vs</div>`
+ }
+ </div>
 
  <div class="team-side away-side">
- ${showScore ? `<span class="team-score">${awayGoals}</span>` : ""}
  <div class="team-name-wrap away-name-wrap">
  <span class="team-name">${item.away_team_name}</span>
  ${renderInlineTeamForm(item.away_form)}

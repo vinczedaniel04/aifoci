@@ -15,7 +15,6 @@ exports.handler = async function () {
 
   const API_BASE = "https://api.football-data.org/v4";
 
-  // Csak topligák + BL + VB
   const DEFAULT_COMPETITIONS = [
    "CL",
    "PL",
@@ -36,7 +35,6 @@ exports.handler = async function () {
    tomorrow.setDate(tomorrow.getDate() + 1);
    const tomorrowStr = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
 
-   // A logikai nap éjféltől másnap reggel 6-ig tart
    const startOfDay = `${todayStr}T00:00:00.000Z`;
    const endOfDay = `${tomorrowStr}T06:00:00.000Z`;
 
@@ -120,9 +118,6 @@ exports.handler = async function () {
   );
 
   const hasAnyTodayInDb = existingRows.length > 0;
-
-  // JAVÍTVA: Eltávolítva a "túlokoskodó" szűrés. 
-  // Mindig lekérjük mind a 7 ligát a DEFAULT_COMPETITIONS tömbből.
   const competitionsToFetch = DEFAULT_COMPETITIONS;
 
   let allMatches = [];
@@ -141,7 +136,6 @@ exports.handler = async function () {
    }
 
    if (result.matches.length > 0) {
-    // Csak a másnap reggel 6:00 előtti meccseket engedjük be!
     const filteredMatches = result.matches.filter(m => m.utcDate <= endOfDay);
     
     if (filteredMatches.length > 0) {
@@ -171,6 +165,9 @@ exports.handler = async function () {
 
    full_time_home: m.score?.fullTime?.home ?? null,
    full_time_away: m.score?.fullTime?.away ?? null,
+
+   half_time_home: m.score?.halfTime?.home ?? null,
+   half_time_away: m.score?.halfTime?.away ?? null,
 
    live_home:
     m.score?.fullTime?.home ??
