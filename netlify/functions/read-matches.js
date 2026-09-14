@@ -95,12 +95,15 @@ exports.handler = async function () {
  away_team_crest: m.awayTeam?.crest || null,
 
  full_time_home: m.score?.fullTime?.home ?? null,
- full_time_away: m.score?.fullTime?.away ?? null,
+   full_time_away: m.score?.fullTime?.away ?? null,
 
- live_home:
- m.score?.fullTime?.home ??
- m.score?.halfTime?.home ??
- null,
+   half_time_home: m.score?.halfTime?.home ?? null,
+   half_time_away: m.score?.halfTime?.away ?? null,
+
+   live_home:
+    m.score?.fullTime?.home ??
+    m.score?.halfTime?.home ??
+    null,
 
  live_away:
  m.score?.fullTime?.away ??

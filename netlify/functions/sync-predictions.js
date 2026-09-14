@@ -184,7 +184,6 @@ exports.handler = async function () {
     expectedAwayGoals = (expectedAwayGoals * 0.6) + (avg * 0.4);
    }
 
-   // Fékek lazítása: 0.85 és 0.70 alá ne essenek a lambdák, megelőzve az 1-0 beragadást
    expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.85, 3.2);
    expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.70, 2.9);
 
@@ -198,13 +197,12 @@ exports.handler = async function () {
    let awayWin = 0;
 
    const scoreCandidates = [];
-   const rho = 0.13; // Dixon-Coles korrekciós paraméter
+   const rho = 0.13;
 
    for (let h = 0; h <= 6; h += 1) {
     for (let a = 0; a <= 6; a += 1) {
      let baseP = poisson(expectedHomeGoals, h) * poisson(expectedAwayGoals, a);
 
-     // Dixon-Coles korrekció a kis gólszámú és döntetlen meccsekre
      if (h === 0 && a === 0) {
       baseP *= (1 - expectedHomeGoals * expectedAwayGoals * rho);
      } else if (h === 0 && a === 1) {
@@ -215,7 +213,6 @@ exports.handler = async function () {
       baseP *= (1 - rho);
      }
 
-     // Döntetlenek támogatása kiegyenlített erők esetén
      let adjusted = Math.max(0, baseP);
      if (h === a) {
       adjusted *= 1.15;
@@ -757,6 +754,8 @@ exports.handler = async function () {
      status: match.status,
      live_home: match.live_home ?? null,
      live_away: match.live_away ?? null,
+     half_time_home: match.half_time_home ?? null,
+     half_time_away: match.half_time_away ?? null,
      minute: match.minute ?? null,
      home_form: homeLast5Form,
      away_form: awayLast5Form,
@@ -790,6 +789,8 @@ exports.handler = async function () {
 
     live_home: match.live_home ?? null,
     live_away: match.live_away ?? null,
+    half_time_home: match.half_time_home ?? null,
+    half_time_away: match.half_time_away ?? null,
     minute: match.minute ?? null,
 
     predicted_score: prediction.predicted_score,
@@ -902,6 +903,8 @@ exports.handler = async function () {
      status: row.status,
      live_home: row.live_home,
      live_away: row.live_away,
+     half_time_home: row.half_time_home,
+     half_time_away: row.half_time_away,
      minute: row.minute,
      home_form: row.home_form,
      away_form: row.away_form,
@@ -938,6 +941,8 @@ exports.handler = async function () {
 
      live_home: row.live_home,
      live_away: row.live_away,
+     half_time_home: row.half_time_home,
+     half_time_away: row.half_time_away,
      minute: row.minute,
 
      predicted_score: row.predicted_score,
