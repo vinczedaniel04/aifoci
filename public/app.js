@@ -361,15 +361,6 @@ function createMatchCard(item) {
  <span class="label">Mindkét csapat gól valószínűség</span>
  <strong>${item.predicted_btts_probability ?? "-"}%</strong>
  </div>
- <div class="detail-box">
- <span class="label">Szögletek</span>
- <strong>${item.predicted_corners_total ?? "-"}</strong>
- </div>
- <div class="detail-box">
- <span class="label">Lapok</span>
- <strong>${item.predicted_cards_total ?? "-"}</strong>
- </div>
- </div>
  <div class="explanation">${item.explanation || ""}</div>
  `;
 

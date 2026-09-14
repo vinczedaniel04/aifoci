@@ -72,36 +72,6 @@ exports.handler = async function () {
    return Array.isArray(value) ? value.slice(0, 5) : [];
   }
 
-  function estimateCorners(expectedHomeGoals, expectedAwayGoals) {
-   const totalExpectedGoals = expectedHomeGoals + expectedAwayGoals;
-   const safeTotal = totalExpectedGoals <= 0 ? 0.1 : totalExpectedGoals;
-   const baseCorners = 8.0;
-   const totalCorners = baseCorners + totalExpectedGoals * 1.65;
-
-   return {
-    total: Number(totalCorners.toFixed(2)),
-    home: Number((totalCorners * (expectedHomeGoals / safeTotal)).toFixed(2)),
-    away: Number((totalCorners * (expectedAwayGoals / safeTotal)).toFixed(2))
-   };
-  }
-
-  function estimateCards(expectedHomeGoals, expectedAwayGoals) {
-   const totalExpectedGoals = expectedHomeGoals + expectedAwayGoals;
-   const goalDiff = Math.abs(expectedHomeGoals - expectedAwayGoals);
-
-   let totalCards = 3.6;
-
-   if (goalDiff < 0.35) totalCards += 0.9;
-   else if (goalDiff < 0.7) totalCards += 0.4;
-
-   if (totalExpectedGoals < 2.2) totalCards += 0.5;
-   else if (totalExpectedGoals > 3.4) totalCards -= 0.2;
-
-   return {
-    total: Number(totalCards.toFixed(2))
-   };
-  }
-
   const { data: settingsRow, error: settingsError } = await supabase
    .from("model_settings")
    .select("*")
@@ -113,16 +83,15 @@ exports.handler = async function () {
   if (settingsError) throw settingsError;
   if (!settingsRow) throw new Error("Nincs aktív model_settings sor.");
 
-
   function predictMatch(match, homeForm, awayForm, settings) {
-   const homeAttackRaw = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.2);
+   const homeAttackRaw = Number(homeForm.avg_goals_for_home ?? homeForm.avg_goals_for ?? 1.3);
    const homeDefenseRaw = Number(homeForm.avg_goals_against_home ?? homeForm.avg_goals_against ?? 1.2);
 
-   const awayAttackRaw = Number(awayForm.avg_goals_for_away ?? awayForm.avg_goals_for ?? 1.0);
-   const awayDefenseRaw = Number(awayForm.avg_goals_against_away ?? awayForm.avg_goals_against ?? 1.0);
+   const awayAttackRaw = Number(awayForm.avg_goals_for_away ?? awayForm.avg_goals_for ?? 1.1);
+   const awayDefenseRaw = Number(awayForm.avg_goals_against_away ?? awayForm.avg_goals_against ?? 1.1);
 
-   const homeLast10Attack = Number(homeForm.last10_avg_goals_for ?? 1.3);
-   const awayLast10Attack = Number(awayForm.last10_avg_goals_for ?? 1.2);
+   const homeLast10Attack = Number(homeForm.last10_avg_goals_for ?? 1.35);
+   const awayLast10Attack = Number(awayForm.last10_avg_goals_for ?? 1.25);
 
    const homeLast10Defense = Number(homeForm.last10_avg_goals_against ?? 1.2);
    const awayLast10Defense = Number(awayForm.last10_avg_goals_against ?? 1.2);
@@ -142,10 +111,10 @@ exports.handler = async function () {
    const meanRegression = Number(settings.mean_regression_strength || 0.35);
    const formBoost = Number(settings.form_boost_weight || 0.35);
 
-   const over25Threshold = Number(settings.over25_threshold ?? 0.6);
-   const bttsThreshold = Number(settings.btts_threshold ?? 0.6);
-   const minTotalGoalsForOver = Number(settings.min_total_goals_for_over ?? 2.6);
-   const minTeamGoalForBtts = Number(settings.min_team_goal_for_btts ?? 0.95);
+   const over25Threshold = Number(settings.over25_threshold ?? 0.58);
+   const bttsThreshold = Number(settings.btts_threshold ?? 0.58);
+   const minTotalGoalsForOver = Number(settings.min_total_goals_for_over ?? 2.5);
+   const minTeamGoalForBtts = Number(settings.min_team_goal_for_btts ?? 0.90);
 
    const homeAttack = regressTowardMean(homeAttackRaw, 1.70, meanRegression) * homeLeagueStrength;
    const awayAttack = regressTowardMean(awayAttackRaw, 1.45, meanRegression) * awayLeagueStrength;
@@ -215,11 +184,12 @@ exports.handler = async function () {
     expectedAwayGoals = (expectedAwayGoals * 0.6) + (avg * 0.4);
    }
 
-   expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.45, 2.7);
-   expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.45, 2.6);
+   // Fékek lazítása: 0.85 és 0.70 alá ne essenek a lambdák, megelőzve az 1-0 beragadást
+   expectedHomeGoals = clamp(Number(expectedHomeGoals.toFixed(2)), 0.85, 3.2);
+   expectedAwayGoals = clamp(Number(expectedAwayGoals.toFixed(2)), 0.70, 2.9);
 
    let bestProbability = 0;
-   let bestScore = "0-0";
+   let bestScore = "1-1";
 
    let over25 = 0;
    let btts = 0;
@@ -228,15 +198,28 @@ exports.handler = async function () {
    let awayWin = 0;
 
    const scoreCandidates = [];
+   const rho = 0.13; // Dixon-Coles korrekciós paraméter
 
    for (let h = 0; h <= 6; h += 1) {
     for (let a = 0; a <= 6; a += 1) {
-     const probability =
-      poisson(expectedHomeGoals, h) * poisson(expectedAwayGoals, a);
+     let baseP = poisson(expectedHomeGoals, h) * poisson(expectedAwayGoals, a);
 
-     let adjusted = probability;
+     // Dixon-Coles korrekció a kis gólszámú és döntetlen meccsekre
+     if (h === 0 && a === 0) {
+      baseP *= (1 - expectedHomeGoals * expectedAwayGoals * rho);
+     } else if (h === 0 && a === 1) {
+      baseP *= (1 + expectedHomeGoals * rho);
+     } else if (h === 1 && a === 0) {
+      baseP *= (1 + expectedAwayGoals * rho);
+     } else if (h === 1 && a === 1) {
+      baseP *= (1 - rho);
+     }
 
-     if (h === a) adjusted *= 0.93;
+     // Döntetlenek támogatása kiegyenlített erők esetén
+     let adjusted = Math.max(0, baseP);
+     if (h === a) {
+      adjusted *= 1.15;
+     }
 
      scoreCandidates.push({
       home: h,
@@ -244,7 +227,7 @@ exports.handler = async function () {
       score: `${h}-${a}`,
       total: h + a,
       btts: h > 0 && a > 0,
-      probability,
+      probability: baseP,
       adjusted
      });
 
@@ -253,12 +236,12 @@ exports.handler = async function () {
       bestScore = `${h}-${a}`;
      }
 
-     if (h + a >= 3) over25 += probability;
-     if (h > 0 && a > 0) btts += probability;
+     if (h + a >= 3) over25 += adjusted;
+     if (h > 0 && a > 0) btts += adjusted;
 
-     if (h > a) homeWin += probability;
-     else if (h === a) draw += probability;
-     else awayWin += probability;
+     if (h > a) homeWin += adjusted;
+     else if (h === a) draw += adjusted;
+     else awayWin += adjusted;
     }
    }
 
@@ -308,9 +291,6 @@ exports.handler = async function () {
    if (homeWin > draw && homeWin > awayWin) predicted1x2Pick = "HOME";
    else if (awayWin > homeWin && awayWin > draw) predicted1x2Pick = "AWAY";
 
-   const corners = estimateCorners(expectedHomeGoals, expectedAwayGoals);
-   const cards = estimateCards(expectedHomeGoals, expectedAwayGoals);
-
    return {
     predicted_score: bestScore,
     predicted_home_goals: Number(expectedHomeGoals.toFixed(2)),
@@ -322,8 +302,6 @@ exports.handler = async function () {
     predicted_draw_probability: Number((draw * 100).toFixed(2)),
     predicted_away_win_probability: Number((awayWin * 100).toFixed(2)),
     predicted_1x2_pick: predicted1x2Pick,
-    predicted_corners_total: corners.total,
-    predicted_cards_total: cards.total,
     final_over25_tip: finalOver25Tip,
     final_btts_tip: finalBttsTip,
     used_home_advantage: homeAdvantage,
@@ -446,8 +424,8 @@ exports.handler = async function () {
 
     if (
      row.predicted_1x2_pick === "DRAW" &&
-     drawProb >= 34 &&
-     gap1x2 >= 1.5
+     drawProb >= 33 &&
+     gap1x2 >= 1.0
     ) {
      addCandidate({
       row,
@@ -823,8 +801,6 @@ exports.handler = async function () {
     predicted_draw_probability: prediction.predicted_draw_probability,
     predicted_away_win_probability: prediction.predicted_away_win_probability,
     predicted_1x2_pick: prediction.predicted_1x2_pick,
-    predicted_corners_total: prediction.predicted_corners_total,
-    predicted_cards_total: prediction.predicted_cards_total,
     final_over25_tip: prediction.final_over25_tip,
     final_btts_tip: prediction.final_btts_tip,
     used_home_advantage: prediction.used_home_advantage,
@@ -973,8 +949,6 @@ exports.handler = async function () {
      predicted_draw_probability: row.predicted_draw_probability,
      predicted_away_win_probability: row.predicted_away_win_probability,
      predicted_1x2_pick: row.predicted_1x2_pick,
-     predicted_corners_total: row.predicted_corners_total,
-     predicted_cards_total: row.predicted_cards_total,
      final_over25_tip: row.final_over25_tip,
      final_btts_tip: row.final_btts_tip,
      used_home_advantage: row.used_home_advantage,

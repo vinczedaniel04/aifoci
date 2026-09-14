@@ -56,10 +56,10 @@ exports.handler = async function () {
 
   const oldSettings = {
    home_advantage: num(settingsRow.home_advantage, 0.05),
-   over25_threshold: num(settingsRow.over25_threshold, 0.6),
-   btts_threshold: num(settingsRow.btts_threshold, 0.6),
-   min_total_goals_for_over: num(settingsRow.min_total_goals_for_over, 2.6),
-   min_team_goal_for_btts: num(settingsRow.min_team_goal_for_btts, 0.95),
+   over25_threshold: num(settingsRow.over25_threshold, 0.58),
+   btts_threshold: num(settingsRow.btts_threshold, 0.58),
+   min_total_goals_for_over: num(settingsRow.min_total_goals_for_over, 2.5),
+   min_team_goal_for_btts: num(settingsRow.min_team_goal_for_btts, 0.90),
    mean_regression_strength: num(settingsRow.mean_regression_strength, 0.35),
    form_boost_weight: num(settingsRow.form_boost_weight, 0.35)
   };
@@ -129,6 +129,10 @@ exports.handler = async function () {
   let drawPredCorrect = 0;
   let awayPredCorrect = 0;
 
+  let actualDrawCount = 0;
+  let actualOverCount = 0;
+  let actualBttsCount = 0;
+
   let overPredCount = 0;
   let overPredWrong = 0;
 
@@ -144,6 +148,13 @@ exports.handler = async function () {
    const winnerHit = row.winner_hit === true;
    const overHit = row.over25_hit === true;
    const bttsHit = row.btts_hit === true;
+
+   const hg = Number(row.actual_home_goals);
+   const ag = Number(row.actual_away_goals);
+
+   if (hg === ag) actualDrawCount += 1;
+   if (hg + ag >= 3) actualOverCount += 1;
+   if (hg > 0 && ag > 0) actualBttsCount += 1;
 
    if (winnerHit) winnerCorrect += 1;
    if (overHit) overCorrect += 1;
@@ -207,12 +218,15 @@ exports.handler = async function () {
   const bttsYesMissRate = bttsYesPredCount ? bttsYesPredWrong / bttsYesPredCount : 0;
   const homeFavMissRate = homeFavChecks ? homeFavWrong / homeFavChecks : 0;
 
-  const TARGET_MISS_RATE_1X2 = 0.3;
-  const TARGET_MISS_RATE_OVER = 0.33;
-  const TARGET_MISS_RATE_BTTS = 0.33;
+  const actualDrawRate = actualDrawCount / rows.length;
+  const actualOverRate = actualOverCount / rows.length;
 
-  const LEARNING_RATE = 0.05;
-  const STABILITY_ALPHA = 0.8;
+  const TARGET_MISS_RATE_1X2 = 0.30;
+  const TARGET_MISS_RATE_OVER = 0.32;
+  const TARGET_MISS_RATE_BTTS = 0.32;
+
+  const LEARNING_RATE = 0.04;
+  const STABILITY_ALPHA = 0.82;
 
   let newHomeAdvantage = oldSettings.home_advantage;
   let newOverThreshold = oldSettings.over25_threshold;
@@ -222,73 +236,59 @@ exports.handler = async function () {
   let newMeanRegression = oldSettings.mean_regression_strength;
   let newFormBoost = oldSettings.form_boost_weight;
 
+  // 1. Hazai előny és döntetlen kalibráció
   if (homeFavChecks >= 10) {
    const error1x2 = homeFavMissRate - TARGET_MISS_RATE_1X2;
    const correction = error1x2 * LEARNING_RATE;
-   const calculatedAdvantage = newHomeAdvantage - correction;
-
-   newHomeAdvantage =
-    newHomeAdvantage * STABILITY_ALPHA +
-    calculatedAdvantage * (1 - STABILITY_ALPHA);
-  } else if (drawPredCount >= 8 && drawPickRate < 0.22) {
-   newHomeAdvantage += 0.002;
+   newHomeAdvantage = newHomeAdvantage - correction;
   }
 
-  if (overPredCount >= 10) {
+  // Ha a valóságban sok a döntetlen (>23%), de a modell alig tippeli vagy túlbecsüli a hazait
+  if (actualDrawRate > 0.23 && drawPredCount / rows.length < 0.15) {
+   newHomeAdvantage -= 0.003; // Csökkentjük a hazai torzítást, hogy több döntetlen nyíljon meg
+  }
+
+  newHomeAdvantage = (oldSettings.home_advantage * STABILITY_ALPHA) + (newHomeAdvantage * (1 - STABILITY_ALPHA));
+
+  // 2. Over 2.5 finomhangolás a valós ligagólokhoz
+  if (overPredCount >= 8) {
    const errorOver = overMissRate - TARGET_MISS_RATE_OVER;
    const correction = errorOver * LEARNING_RATE;
 
-   const calculatedThreshold = newOverThreshold + correction;
-   const calculatedMinTotal = newMinTotalGoalsForOver + correction * 2.5;
-
-   newOverThreshold =
-    newOverThreshold * STABILITY_ALPHA +
-    calculatedThreshold * (1 - STABILITY_ALPHA);
-
-   newMinTotalGoalsForOver =
-    newMinTotalGoalsForOver * STABILITY_ALPHA +
-    calculatedMinTotal * (1 - STABILITY_ALPHA);
+   newOverThreshold = (newOverThreshold * STABILITY_ALPHA) + ((newOverThreshold + correction) * (1 - STABILITY_ALPHA));
+   newMinTotalGoalsForOver = (newMinTotalGoalsForOver * STABILITY_ALPHA) + ((newMinTotalGoalsForOver + correction * 2.0) * (1 - STABILITY_ALPHA));
+  } else if (actualOverRate > 0.50) {
+   // Ha a meccsek több mint fele Over, de a modell nem mert tippelni
+   newOverThreshold -= 0.005;
+   newMinTotalGoalsForOver -= 0.02;
   }
 
-  if (bttsYesPredCount >= 10) {
+  // 3. BTTS (Mindkét csapat szerez gólt) finomhangolás
+  if (bttsYesPredCount >= 8) {
    const errorBtts = bttsYesMissRate - TARGET_MISS_RATE_BTTS;
    const correction = errorBtts * LEARNING_RATE;
 
-   const calculatedBttsThresh = newBttsThreshold + correction;
-   const calculatedMinGoal = newMinTeamGoalForBtts + correction * 1.5;
-
-   newBttsThreshold =
-    newBttsThreshold * STABILITY_ALPHA +
-    calculatedBttsThresh * (1 - STABILITY_ALPHA);
-
-   newMinTeamGoalForBtts =
-    newMinTeamGoalForBtts * STABILITY_ALPHA +
-    calculatedMinGoal * (1 - STABILITY_ALPHA);
+   newBttsThreshold = (newBttsThreshold * STABILITY_ALPHA) + ((newBttsThreshold + correction) * (1 - STABILITY_ALPHA));
+   newMinTeamGoalForBtts = (newMinTeamGoalForBtts * STABILITY_ALPHA) + ((newMinTeamGoalForBtts + correction * 1.2) * (1 - STABILITY_ALPHA));
   }
 
+  // 4. Formasúly és regresszió
   if (homeFavChecks >= 10) {
    if (homeFavMissRate < 0.25) {
-    newFormBoost =
-     newFormBoost * STABILITY_ALPHA +
-     (newFormBoost + 0.02) * (1 - STABILITY_ALPHA);
-   } else if (homeFavMissRate > 0.4) {
-    newFormBoost =
-     newFormBoost * STABILITY_ALPHA +
-     (newFormBoost - 0.02) * (1 - STABILITY_ALPHA);
-
-    newMeanRegression =
-     newMeanRegression * STABILITY_ALPHA +
-     (newMeanRegression + 0.02) * (1 - STABILITY_ALPHA);
+    newFormBoost = (newFormBoost * STABILITY_ALPHA) + ((newFormBoost + 0.02) * (1 - STABILITY_ALPHA));
+   } else if (homeFavMissRate > 0.38) {
+    newFormBoost = (newFormBoost * STABILITY_ALPHA) + ((newFormBoost - 0.02) * (1 - STABILITY_ALPHA));
+    newMeanRegression = (newMeanRegression * STABILITY_ALPHA) + ((newMeanRegression + 0.02) * (1 - STABILITY_ALPHA));
    }
   }
 
-  newHomeAdvantage = clamp(Number(newHomeAdvantage.toFixed(4)), 0.0, 0.2);
-  newOverThreshold = clamp(Number(newOverThreshold.toFixed(4)), 0.52, 0.72);
-  newBttsThreshold = clamp(Number(newBttsThreshold.toFixed(4)), 0.52, 0.72);
-  newMinTotalGoalsForOver = clamp(Number(newMinTotalGoalsForOver.toFixed(4)), 2.3, 3.1);
-  newMinTeamGoalForBtts = clamp(Number(newMinTeamGoalForBtts.toFixed(4)), 0.75, 1.2);
+  newHomeAdvantage = clamp(Number(newHomeAdvantage.toFixed(4)), 0.01, 0.15);
+  newOverThreshold = clamp(Number(newOverThreshold.toFixed(4)), 0.50, 0.68);
+  newBttsThreshold = clamp(Number(newBttsThreshold.toFixed(4)), 0.50, 0.68);
+  newMinTotalGoalsForOver = clamp(Number(newMinTotalGoalsForOver.toFixed(4)), 2.2, 2.9);
+  newMinTeamGoalForBtts = clamp(Number(newMinTeamGoalForBtts.toFixed(4)), 0.75, 1.15);
   newMeanRegression = clamp(Number(newMeanRegression.toFixed(4)), 0.2, 0.5);
-  newFormBoost = clamp(Number(newFormBoost.toFixed(4)), 0.15, 0.6);
+  newFormBoost = clamp(Number(newFormBoost.toFixed(4)), 0.15, 0.55);
 
   const newSettings = {
    home_advantage: newHomeAdvantage,
@@ -340,7 +340,9 @@ exports.handler = async function () {
     draw_pick_count: drawPredCount,
     draw_pick_rate: Number((drawPickRate * 100).toFixed(2)),
     away_pick_count: awayPredCount,
-    away_pick_rate: Number((awayPickRate * 100).toFixed(2))
+    away_pick_rate: Number((awayPickRate * 100).toFixed(2)),
+    actual_draw_rate: Number((actualDrawRate * 100).toFixed(2)),
+    actual_over_rate: Number((actualOverRate * 100).toFixed(2))
    },
    miss_breakdown: {
     home_favorite_checks: homeFavChecks,
