@@ -196,11 +196,41 @@ exports.handler = async function () {
   }
 
   function buildTeamFormRow(team, matches) {
-   const sortedMatches = [...matches].sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime());
+   // Szigorúan csak az 5 topliga és a Bajnokok Ligája
+   const ALLOWED_COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1", "CL"];
+   const currentSeasonStartDate = new Date(`${season}-07-01T00:00:00.000Z`).getTime();
+
+   // 1. Kiszűrjük a nem engedélyezett (pl. kupák, barátságos) meccseket
+   const validMatches = (matches || []).filter((m) => {
+    const compCode = m.competition?.code;
+    return ALLOWED_COMPETITIONS.includes(compCode);
+   });
+
+   // 2. Dátum szerint csökkenő sorrend
+   const sortedMatches = [...validMatches].sort(
+    (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
+   );
+
+   // 3. Különválasztjuk az aktuális őszi (2026.07.01 utáni) és az idősebb meccseket
+   const currentSeasonMatches = sortedMatches.filter(
+    (m) => new Date(m.utcDate).getTime() >= currentSeasonStartDate
+   );
+   const olderMatches = sortedMatches.filter(
+    (m) => new Date(m.utcDate).getTime() < currentSeasonStartDate
+   );
+
+   // 4. Forma prioritás: ha van elég friss meccs, CSAK azt használjuk!
+   // Ha nincs meg az 5 meccs (pl. frissen feljutott csapat), tavaszi élvonal/BL meccsel pótoljuk.
+   let formSourceMatches = [...currentSeasonMatches];
+   if (formSourceMatches.length < 5) {
+    const needed = 5 - formSourceMatches.length;
+    formSourceMatches = formSourceMatches.concat(olderMatches.slice(0, needed));
+   }
+
    const homeMatches = sortedMatches.filter((m) => m.homeTeam?.id === team.team_id).slice(0, 10);
    const awayMatches = sortedMatches.filter((m) => m.awayTeam?.id === team.team_id).slice(0, 10);
    const last10AllMatches = sortedMatches.slice(0, 10);
-   const recentAllMatches = sortedMatches.slice(0, 5);
+   const recentAllMatches = formSourceMatches.slice(0, 5);
 
    function mapFormResult(match) {
     const isHome = match.homeTeam?.id === team.team_id;
