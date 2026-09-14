@@ -118,12 +118,11 @@ exports.handler = async function () {
   const rowsToCopy = [];
   const teamsToFetch = [];
 
-for (const team of teams) {
+  for (const team of teams) {
    const todayCache = todayCacheByTeam.get(team.team_id);
    const latestCache = latestSeasonCacheByTeam.get(team.team_id);
    const latestForm = normalizeFormArray(latestCache?.last_5_form);
 
-   // Csak akkor tekintjük késznek a mai napra, ha valóban van értékelhető meccse
    if (todayCache && (todayCache.last_5_count > 0 || (todayCache.last_5_form && todayCache.last_5_form.length > 0))) {
     continue;
    }
@@ -136,6 +135,9 @@ for (const team of teams) {
      season,
      last_5_count: 5,
      last_5_form: latestForm.slice(0, 5),
+     last10_ht_goals_for: latestCache.last10_ht_goals_for ?? null,
+     last10_ht_goals_against: latestCache.last10_ht_goals_against ?? null,
+     last10_ht_over05_rate: latestCache.last10_ht_over05_rate ?? null,
      updated_at: new Date().toISOString()
     });
    } else {
@@ -150,7 +152,7 @@ for (const team of teams) {
 
   const batch = teamsToFetch.slice(0, 4);
 
-async function getRecentFinishedMatches(team) {
+  async function getRecentFinishedMatches(team) {
    try {
     const today = new Date();
     const past = new Date();
@@ -203,22 +205,18 @@ async function getRecentFinishedMatches(team) {
   }
 
   function buildTeamFormRow(team, matches) {
-   // Szigorúan csak az 5 topliga és a Bajnokok Ligája
    const ALLOWED_COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1", "CL"];
    const currentSeasonStartDate = new Date(`${season}-07-01T00:00:00.000Z`).getTime();
 
-   // 1. Kiszűrjük a nem engedélyezett (pl. kupák, barátságos) meccseket
    const validMatches = (matches || []).filter((m) => {
     const compCode = m.competition?.code;
     return ALLOWED_COMPETITIONS.includes(compCode);
    });
 
-   // 2. Dátum szerint csökkenő sorrend
    const sortedMatches = [...validMatches].sort(
     (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
    );
 
-   // 3. Különválasztjuk az aktuális őszi (2026.07.01 utáni) és az idősebb meccseket
    const currentSeasonMatches = sortedMatches.filter(
     (m) => new Date(m.utcDate).getTime() >= currentSeasonStartDate
    );
@@ -226,8 +224,6 @@ async function getRecentFinishedMatches(team) {
     (m) => new Date(m.utcDate).getTime() < currentSeasonStartDate
    );
 
-   // 4. Forma prioritás: ha van elég friss meccs, CSAK azt használjuk!
-   // Ha nincs meg az 5 meccs (pl. frissen feljutott csapat), tavaszi élvonal/BL meccsel pótoljuk.
    let formSourceMatches = [...currentSeasonMatches];
    if (formSourceMatches.length < 5) {
     const needed = 5 - formSourceMatches.length;
@@ -287,6 +283,28 @@ async function getRecentFinishedMatches(team) {
     });
    }
 
+   // --- Félidei statisztikák az utolsó 10 meccsből ---
+   const htStats = last10AllMatches.map((m) => {
+    const isHome = m.homeTeam?.id === team.team_id;
+    const htHome = m.score?.halfTime?.home;
+    const htAway = m.score?.halfTime?.away;
+
+    if (htHome == null || htAway == null) return null;
+
+    const htGoalsFor = isHome ? htHome : htAway;
+    const htGoalsAgainst = isHome ? htAway : htHome;
+
+    return {
+     htGoalsFor,
+     htGoalsAgainst,
+     htOver05: (htGoalsFor + htGoalsAgainst) > 0 ? 1 : 0
+    };
+   }).filter(Boolean);
+
+   const last10_ht_goals_for = htStats.length > 0 ? weightedAverage(htStats.map((x) => x.htGoalsFor), 0.5) : null;
+   const last10_ht_goals_against = htStats.length > 0 ? weightedAverage(htStats.map((x) => x.htGoalsAgainst), 0.5) : null;
+   const last10_ht_over05_rate = htStats.length > 0 ? weightedRate(htStats.map((x) => x.htOver05), 0) : null;
+
    const homeStats = mapStats(homeMatches, true);
    const awayStats = mapStats(awayMatches, false);
    const last10Stats = mapAllStats(last10AllMatches);
@@ -303,6 +321,9 @@ async function getRecentFinishedMatches(team) {
     team_name: team.team_name,
     last_5_count: last5Form.length,
     last_5_form: last5Form,
+    last10_ht_goals_for,
+    last10_ht_goals_against,
+    last10_ht_over05_rate,
     home_last_10_count: homeMatches.length,
     away_last_10_count: awayMatches.length,
     last10_avg_goals_for: weightedAverage(last10Stats.map((x) => x.goalsFor), 1.3),
@@ -333,13 +354,13 @@ async function getRecentFinishedMatches(team) {
     updated_at: new Date().toISOString()
    };
   }
-const fetchedRows = [];
+
+  const fetchedRows = [];
   const fetchedTeams = [];
 
   for (const team of batch) {
    const recentMatches = await getRecentFinishedMatches(team);
 
-   // Ha az API korlátozásba futott vagy hiba történt, nem mentjük el üresen
    if (recentMatches === null) {
     console.warn(`Kihagyva (újrapróbálkozás a következő cron futáskor): ${team.team_name}`);
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -354,7 +375,9 @@ const fetchedRows = [];
     team_name: team.team_name,
     fetched_matches: recentMatches.length,
     last_5_count: row.last_5_count,
-    last_5_form: row.last_5_form
+    last_5_form: row.last_5_form,
+    last10_ht_goals_for: row.last10_ht_goals_for,
+    last10_ht_over05_rate: row.last10_ht_over05_rate
    });
 
    await new Promise((resolve) => setTimeout(resolve, 1800));

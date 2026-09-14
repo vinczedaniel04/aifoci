@@ -382,7 +382,7 @@ header { text-align: center; margin: 0; padding: 0; border-bottom: 0; }
 .compact-box .label, .detail-box .label { 
   display: block; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; 
 }
-.compact-box strong, .detail-box strong { display: block; font-size: 22px; font-weight: 900; color: #fff; line-height: 1.2; letter-spacing: -0.5px; }
+.compact-box strong, .detail-box strong { display: block; font-size: 20px; font-weight: 900; color: #fff; line-height: 1.2; letter-spacing: -0.5px; }
 
 /* Részletes tippleesnyíló */
 .toggle-area { margin-top: 10px; }
@@ -513,12 +513,13 @@ header { text-align: center; margin: 0; padding: 0; border-bottom: 0; }
   .market-left, .market-right, .market-short { font-size: 14px !important; font-weight: 900; }
   .market-logo { width: 20px !important; height: 20px !important; }
   
-  /* Statisztikai 3-as grid */
+  /* Statisztikai rácsok mobilon */
   .compact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 6px !important; margin-bottom: 10px !important; }
   .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 6px !important; margin-bottom: 10px !important; }
   .compact-box, .detail-box { padding: 8px 4px !important; border-radius: 12px !important; text-align: center; }
   .compact-box .label, .detail-box .label { font-size: 9px !important; margin-bottom: 3px !important; }
-  .compact-box strong, .detail-box strong { font-size: 14px !important; line-height: 1.1 !important; }
+  .compact-box strong { font-size: 14px !important; line-height: 1.1 !important; }
+  .detail-box strong { font-size: 13px !important; line-height: 1.15 !important; }
   
   .time { font-size: 11px; }
 
@@ -543,6 +544,6 @@ header { text-align: center; margin: 0; padding: 0; border-bottom: 0; }
   .brand-title-text { font-size: 28px; }
   .logo-icon { width: 36px; height: 36px; }
   .market-left, .market-right { font-size: 13px !important; }
-  .compact-box strong { font-size: 13px !important; }
+  .compact-box strong, .detail-box strong { font-size: 12px !important; }
   .team-name { font-size: 11px; }
 }

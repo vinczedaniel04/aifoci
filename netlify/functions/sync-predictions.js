@@ -288,11 +288,31 @@ exports.handler = async function () {
    if (homeWin > draw && homeWin > awayWin) predicted1x2Pick = "HOME";
    else if (awayWin > homeWin && awayWin > draw) predicted1x2Pick = "AWAY";
 
+   // --- FÉLIDEI STATISZTIKÁK SZÁMÍTÁSA ---
+   const homeHtRate = Number(homeForm.last10_ht_over05_rate ?? 65);
+   const awayHtRate = Number(awayForm.last10_ht_over05_rate ?? 65);
+   const avgHtRate = (homeHtRate + awayHtRate) / 2;
+
+   const expectedHtGoals = Number((totalGoals * 0.41).toFixed(2));
+   const probHt0 = Math.exp(-expectedHtGoals);
+   const rawHtOver05Prob = (1 - probHt0) * 100;
+
+   const predictedHtOver05Prob = clamp(
+    Number(((rawHtOver05Prob * 0.7) + (avgHtRate * 0.3)).toFixed(1)),
+    10,
+    95
+   );
+
+   const finalHtOver05Tip = predictedHtOver05Prob >= 68 ? "0,5 FELETT" : "0,5 ALATT";
+
    return {
     predicted_score: bestScore,
     predicted_home_goals: Number(expectedHomeGoals.toFixed(2)),
     predicted_away_goals: Number(expectedAwayGoals.toFixed(2)),
     predicted_total_goals: Number(totalGoals.toFixed(2)),
+    predicted_ht_goals: expectedHtGoals,
+    predicted_ht_over05_probability: predictedHtOver05Prob,
+    final_ht_over05_tip: finalHtOver05Tip,
     predicted_over25_probability: Number((over25 * 100).toFixed(2)),
     predicted_btts_probability: Number((btts * 100).toFixed(2)),
     predicted_home_win_probability: Number((homeWin * 100).toFixed(2)),
@@ -765,6 +785,9 @@ exports.handler = async function () {
       isFinished && existingPrediction.predicted_1x2_pick
        ? existingPrediction.predicted_1x2_pick === actual1x2
        : null,
+     predicted_ht_goals: prediction.predicted_ht_goals,
+     predicted_ht_over05_probability: prediction.predicted_ht_over05_probability,
+     final_ht_over05_tip: prediction.final_ht_over05_tip,
      updated_at: new Date().toISOString()
     });
 
@@ -796,6 +819,10 @@ exports.handler = async function () {
     predicted_score: prediction.predicted_score,
     predicted_home_goals: prediction.predicted_home_goals,
     predicted_away_goals: prediction.predicted_away_goals,
+    predicted_total_goals: prediction.predicted_total_goals,
+    predicted_ht_goals: prediction.predicted_ht_goals,
+    predicted_ht_over05_probability: prediction.predicted_ht_over05_probability,
+    final_ht_over05_tip: prediction.final_ht_over05_tip,
     predicted_over25_probability: prediction.predicted_over25_probability,
     predicted_btts_probability: prediction.predicted_btts_probability,
     predicted_home_win_probability: prediction.predicted_home_win_probability,
@@ -914,6 +941,9 @@ exports.handler = async function () {
      over25_hit,
      btts_hit,
      winner_hit,
+     predicted_ht_goals: row.predicted_ht_goals,
+     predicted_ht_over05_probability: row.predicted_ht_over05_probability,
+     final_ht_over05_tip: row.final_ht_over05_tip,
      updated_at: row.updated_at
     })
     .eq("match_id", row.match_id);
@@ -948,6 +978,10 @@ exports.handler = async function () {
      predicted_score: row.predicted_score,
      predicted_home_goals: row.predicted_home_goals,
      predicted_away_goals: row.predicted_away_goals,
+     predicted_total_goals: row.predicted_total_goals,
+     predicted_ht_goals: row.predicted_ht_goals,
+     predicted_ht_over05_probability: row.predicted_ht_over05_probability,
+     final_ht_over05_tip: row.final_ht_over05_tip,
      predicted_over25_probability: row.predicted_over25_probability,
      predicted_btts_probability: row.predicted_btts_probability,
      predicted_home_win_probability: row.predicted_home_win_probability,

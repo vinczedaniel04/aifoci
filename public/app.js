@@ -339,11 +339,24 @@ function createMatchCard(item) {
 
  const bttsText = item.final_btts_tip === "IGEN" ? "Igen" : "Nem";
 
+ const htGoalsDisplay = item.predicted_ht_goals != null ? item.predicted_ht_goals : "-";
+ const htTipDisplay = item.final_ht_over05_tip
+  ? `${item.final_ht_over05_tip} (${item.predicted_ht_over05_probability ?? "-"}%)`
+  : "-";
+
  const detailHtml = `
  <div class="detail-grid">
  <div class="detail-box">
  <span class="label">Legvalószínűbb eredmény</span>
  <strong>${item.predicted_score || "-"}</strong>
+ </div>
+ <div class="detail-box">
+ <span class="label">1. félidő várható gól</span>
+ <strong>${htGoalsDisplay}</strong>
+ </div>
+ <div class="detail-box">
+ <span class="label">1. félidő 0.5 gól</span>
+ <strong>${htTipDisplay}</strong>
  </div>
  <div class="detail-box">
  <span class="label">Hazai győzelem</span>
@@ -364,6 +377,7 @@ function createMatchCard(item) {
  <div class="detail-box">
  <span class="label">Mindkét csapat gól valószínűség</span>
  <strong>${item.predicted_btts_probability ?? "-"}%</strong>
+ </div>
  </div>
  <div class="explanation">${item.explanation || ""}</div>
  `;
