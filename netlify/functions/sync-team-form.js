@@ -118,14 +118,15 @@ exports.handler = async function () {
   const rowsToCopy = [];
   const teamsToFetch = [];
 
-  for (const team of teams) {
+for (const team of teams) {
    const todayCache = todayCacheByTeam.get(team.team_id);
    const latestCache = latestSeasonCacheByTeam.get(team.team_id);
-   const todayForm = normalizeFormArray(todayCache?.last_5_form);
    const latestForm = normalizeFormArray(latestCache?.last_5_form);
 
-// Ha ma már lekérdeztük (akár megvan az 5 meccs, akár nem), ugorjuk át, ne okozzon dugót!
-   if (todayCache) continue;
+   // Csak akkor tekintjük késznek a mai napra, ha valóban van értékelhető meccse
+   if (todayCache && (todayCache.last_5_count > 0 || (todayCache.last_5_form && todayCache.last_5_form.length > 0))) {
+    continue;
+   }
    
    if (latestCache && latestForm.length >= 5) {
     const { id, ...copyRow } = latestCache;
@@ -149,8 +150,7 @@ exports.handler = async function () {
 
   const batch = teamsToFetch.slice(0, 4);
 
-  // JAVÍTOTT: Dátum intervallumot adunk meg, hogy áthidalja a szezonváltást (1 évet megyünk vissza)
-  async function getRecentFinishedMatches(team) {
+async function getRecentFinishedMatches(team) {
    try {
     const today = new Date();
     const past = new Date();
@@ -161,13 +161,20 @@ exports.handler = async function () {
 
     const url = `${API_BASE}/teams/${team.team_id}/matches?status=FINISHED&dateFrom=${dateFrom}&dateTo=${dateTo}&limit=40`;
 
-    const data = await fetchJson(url, {
+    const response = await fetch(url, {
      headers: { "X-Auth-Token": footballToken }
     });
+
+    if (!response.ok) {
+     console.error(`API hiba [${team.team_name}]: HTTP ${response.status}`);
+     return null;
+    }
+
+    const data = await response.json();
     return data.matches || [];
    } catch (e) {
     console.error("Hiba a következőnél:", team.team_name, e.message);
-    return [];
+    return null;
    }
   }
 
@@ -326,12 +333,19 @@ exports.handler = async function () {
     updated_at: new Date().toISOString()
    };
   }
-
-  const fetchedRows = [];
+const fetchedRows = [];
   const fetchedTeams = [];
 
   for (const team of batch) {
    const recentMatches = await getRecentFinishedMatches(team);
+
+   // Ha az API korlátozásba futott vagy hiba történt, nem mentjük el üresen
+   if (recentMatches === null) {
+    console.warn(`Kihagyva (újrapróbálkozás a következő cron futáskor): ${team.team_name}`);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    continue;
+   }
+
    const row = buildTeamFormRow(team, recentMatches);
 
    fetchedRows.push(row);
