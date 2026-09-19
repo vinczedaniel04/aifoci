@@ -208,31 +208,35 @@ exports.handler = async function () {
    const ALLOWED_COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1", "CL"];
    const currentSeasonStartDate = new Date(`${season}-07-01T00:00:00.000Z`).getTime();
 
-   const validMatches = (matches || []).filter((m) => {
+   // 1. Az összes bejövő meccset szigorúan csökkenő sorrendbe rendezzük (a legfrissebb az első indexen)
+   const rawMatches = [...(matches || [])].sort(
+    (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
+   );
+
+   // 2. Csak az engedélyezett ligák meccseit tartjuk meg
+   const validMatches = rawMatches.filter((m) => {
     const compCode = m.competition?.code;
     return ALLOWED_COMPETITIONS.includes(compCode);
    });
 
-   const sortedMatches = [...validMatches].sort(
-    (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
-   );
-
-   const currentSeasonMatches = sortedMatches.filter(
+   // 3. Szezon szerinti bontás
+   const currentSeasonMatches = validMatches.filter(
     (m) => new Date(m.utcDate).getTime() >= currentSeasonStartDate
    );
-   const olderMatches = sortedMatches.filter(
+   const olderMatches = validMatches.filter(
     (m) => new Date(m.utcDate).getTime() < currentSeasonStartDate
    );
 
+   // 4. Ha az aktuális szezonból még nincs 5 meccs, a tavalyi szezon legvégéről pótoljuk
    let formSourceMatches = [...currentSeasonMatches];
    if (formSourceMatches.length < 5) {
     const needed = 5 - formSourceMatches.length;
     formSourceMatches = formSourceMatches.concat(olderMatches.slice(0, needed));
    }
 
-   const homeMatches = sortedMatches.filter((m) => m.homeTeam?.id === team.team_id).slice(0, 10);
-   const awayMatches = sortedMatches.filter((m) => m.awayTeam?.id === team.team_id).slice(0, 10);
-   const last10AllMatches = sortedMatches.slice(0, 10);
+   const homeMatches = validMatches.filter((m) => m.homeTeam?.id === team.team_id).slice(0, 10);
+   const awayMatches = validMatches.filter((m) => m.awayTeam?.id === team.team_id).slice(0, 10);
+   const last10AllMatches = validMatches.slice(0, 10);
    const recentAllMatches = formSourceMatches.slice(0, 5);
 
    function mapFormResult(match) {
@@ -312,7 +316,7 @@ exports.handler = async function () {
    const combinedStats = [...homeStats, ...awayStats];
 
    const avgLeagueStrength = weightedAverage(combinedStats.map((x) => x.leagueStrength ?? 0.9), 0.9);
-   const lastFinishedMatchDate = sortedMatches.length > 0 ? sortedMatches[0].utcDate : null;
+   const lastFinishedMatchDate = validMatches.length > 0 ? validMatches[0].utcDate : null;
 
    return {
     match_day: matchDay,
