@@ -18,7 +18,6 @@ exports.handler = async function () {
   const supabase = createClient(supabaseUrl, supabaseKey);
   const API_BASE = "https://api.football-data.org/v4";
 
-  // --- Fix Map a leggyakoribb név-eltérések áthidalására ---
   const TEAM_NAME_MAP = {
    "OGC Nice": "Nice",
    "RC Strasbourg Alsace": "Strasbourg",
@@ -192,12 +191,15 @@ exports.handler = async function () {
    }
   }
 
-  // --- API-Football v3 xG Lekérdezés Térképezéssel és Robusztus Kereséssel ---
+  // --- API-Football v3 xG Lekérdezés Részletes Rendszernaplával ---
   async function fetchTeamXgStats(teamName) {
-   if (!apiFootballKey) return { avgXgFor: null, avgXgAgainst: null };
+   const logs = [];
+   if (!apiFootballKey) {
+    logs.push("Hiányzó API_FOOTBALL_KEY kulcs");
+    return { avgXgFor: null, avgXgAgainst: null, logs };
+   }
 
    try {
-    // 1. Keresési kifejezések előállítása (Mapping ellenőrzése először)
     const mappedName = TEAM_NAME_MAP[teamName];
     
     const cleanName = teamName
@@ -210,6 +212,7 @@ exports.handler = async function () {
     const searchTerms = Array.from(new Set([mappedName, cleanName, words[words.length - 1], teamName])).filter(Boolean);
 
     let apiTeamId = null;
+    let matchedTerm = "";
 
     for (const term of searchTerms) {
      const teamRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(term)}`, {
@@ -218,14 +221,17 @@ exports.handler = async function () {
      const teamData = await teamRes.json();
      if (teamData.response && teamData.response.length > 0) {
       apiTeamId = teamData.response[0].team.id;
+      matchedTerm = term;
       break;
      }
     }
 
     if (!apiTeamId) {
-     console.warn(`Nem található API-Football ID a következőhöz: ${teamName}`);
-     return { avgXgFor: null, avgXgAgainst: null };
+     logs.push(`Nincs találat a keresőben a kifejezésekre: ${searchTerms.join(", ")}`);
+     return { avgXgFor: null, avgXgAgainst: null, logs };
     }
+
+    logs.push(`Talált ID: ${apiTeamId} (Keresett szóra: "${matchedTerm}")`);
 
     const matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&status=FT&last=5`, {
      headers: { "x-apisports-key": apiFootballKey }
@@ -233,7 +239,12 @@ exports.handler = async function () {
     const matchesData = await matchesRes.json();
     const fixtures = matchesData.response || [];
 
-    if (fixtures.length === 0) return { avgXgFor: null, avgXgAgainst: null };
+    if (fixtures.length === 0) {
+     logs.push(`Nincs befejezett (FT) meccs a csapatnál az API-ban`);
+     return { avgXgFor: null, avgXgAgainst: null, logs };
+    }
+
+    logs.push(`Talált meccsek száma: ${fixtures.length}`);
 
     let totalXgFor = 0;
     let totalXgAgainst = 0;
@@ -249,14 +260,17 @@ exports.handler = async function () {
       const homeTeamObj = statData.response.find(r => r.team && r.team.id === fix.teams.home.id);
       const awayTeamObj = statData.response.find(r => r.team && r.team.id === fix.teams.away.id);
 
-      if (!homeTeamObj || !awayTeamObj) continue;
+      if (!homeTeamObj || !awayTeamObj) {
+       logs.push(`Meccs ${fix.fixture.id}: Nem azonosítható csapatok a statisztikában`);
+       continue;
+      }
 
       const isHome = fix.teams.home.id === apiTeamId;
       const teamStats = isHome ? homeTeamObj.statistics : awayTeamObj.statistics;
       const oppStats = isHome ? awayTeamObj.statistics : homeTeamObj.statistics;
 
-      const xgForObj = teamStats.find((s) => String(s.type).toLowerCase() === "expected_goals");
-      const xgAgainstObj = oppStats.find((s) => String(s.type).toLowerCase() === "expected_goals");
+      const xgForObj = teamStats.find((s) => String(s.type).toLowerCase().replace(/_/g, " ") === "expected goals");
+      const xgAgainstObj = oppStats.find((s) => String(s.type).toLowerCase().replace(/_/g, " ") === "expected goals");
 
       const xgFor = xgForObj && xgForObj.value !== null && xgForObj.value !== undefined ? parseFloat(xgForObj.value) : null;
       const xgAgainst = xgAgainstObj && xgAgainstObj.value !== null && xgAgainstObj.value !== undefined ? parseFloat(xgAgainstObj.value) : null;
@@ -265,19 +279,27 @@ exports.handler = async function () {
        totalXgFor += xgFor;
        totalXgAgainst += xgAgainst;
        count++;
+      } else {
+       logs.push(`Meccs ${fix.fixture.id}: Hiányzó xG értékek (xGF: ${xgFor}, xGA: ${xgAgainst})`);
       }
      }
     }
 
-    if (count === 0) return { avgXgFor: null, avgXgAgainst: null };
+    if (count === 0) {
+     logs.push(`Egyetlen meccsnél sem sikerült xG-t számolni`);
+     return { avgXgFor: null, avgXgAgainst: null, logs };
+    }
+
+    logs.push(`Sikeres xG számítás ${count} meccsből`);
 
     return {
      avgXgFor: Number((totalXgFor / count).toFixed(2)),
-     avgXgAgainst: Number((totalXgAgainst / count).toFixed(2))
+     avgXgAgainst: Number((totalXgAgainst / count).toFixed(2)),
+     logs
     };
    } catch (err) {
-    console.error("API-Football xG hiba:", teamName, err.message);
-    return { avgXgFor: null, avgXgAgainst: null };
+    logs.push(`Hiba a feldolgozás során: ${err.message}`);
+    return { avgXgFor: null, avgXgAgainst: null, logs };
    }
   }
 
@@ -464,7 +486,7 @@ exports.handler = async function () {
    const recentMatches = await getRecentFinishedMatches(team);
 
    if (recentMatches === null) {
-    console.warn(`Kihagyva (újrapróbálkozás a következő cron futáskor): ${team.team_name}`);
+    console.warn(`Kihagyva: ${team.team_name}`);
     await new Promise((resolve) => setTimeout(resolve, 2000));
     continue;
    }
@@ -482,8 +504,7 @@ exports.handler = async function () {
     last_5_form: row.last_5_form,
     last5_avg_xg_for: row.last5_avg_xg_for,
     last5_avg_xg_against: row.last5_avg_xg_against,
-    last10_ht_goals_for: row.last10_ht_goals_for,
-    last10_ht_over05_rate: row.last10_ht_over05_rate
+    debug_logs: xgData.logs || [] // ÚJ: Pontos hibasorok naplózása a válaszban!
    });
 
    await new Promise((resolve) => setTimeout(resolve, 1800));
