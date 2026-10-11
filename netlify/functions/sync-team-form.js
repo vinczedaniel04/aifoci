@@ -18,6 +18,24 @@ exports.handler = async function () {
   const supabase = createClient(supabaseUrl, supabaseKey);
   const API_BASE = "https://api.football-data.org/v4";
 
+  // --- Fix Map a leggyakoribb név-eltérések áthidalására ---
+  const TEAM_NAME_MAP = {
+   "OGC Nice": "Nice",
+   "RC Strasbourg Alsace": "Strasbourg",
+   "RC Celta de Vigo": "Celta Vigo",
+   "Elche CF": "Elche",
+   "RCD Mallorca": "Mallorca",
+   "UD Las Palmas": "Las Palmas",
+   "CA Osasuna": "Osasuna",
+   "RCD Espanyol de Barcelona": "Espanyol",
+   "Getafe CF": "Getafe",
+   "Girona FC": "Girona",
+   "Rayo Vallecano de Madrid": "Rayo Vallecano",
+   "Real Valladolid CF": "Valladolid",
+   "Deportivo Alavés": "Alaves",
+   "Athletic Club": "Athletic Bilbao"
+  };
+
   function getLogicalDates() {
    const now = new Date();
    now.setHours(now.getHours() - 6);
@@ -174,11 +192,14 @@ exports.handler = async function () {
    }
   }
 
-  // --- Pontosított API-Football v3 xG lekérdezés ---
+  // --- API-Football v3 xG Lekérdezés Térképezéssel és Robusztus Kereséssel ---
   async function fetchTeamXgStats(teamName) {
    if (!apiFootballKey) return { avgXgFor: null, avgXgAgainst: null };
 
    try {
+    // 1. Keresési kifejezések előállítása (Mapping ellenőrzése először)
+    const mappedName = TEAM_NAME_MAP[teamName];
+    
     const cleanName = teamName
      .replace(/\b(RC|CF|FC|UD|CD|SD|CA|RCD|Club|OGC|Alsace)\b/gi, "")
      .replace(/\bde\b/gi, "")
@@ -186,7 +207,7 @@ exports.handler = async function () {
      .trim();
 
     const words = cleanName.split(" ").filter((w) => w.length >= 3);
-    const searchTerms = Array.from(new Set([cleanName, words[words.length - 1], teamName])).filter(Boolean);
+    const searchTerms = Array.from(new Set([mappedName, cleanName, words[words.length - 1], teamName])).filter(Boolean);
 
     let apiTeamId = null;
 
@@ -201,7 +222,10 @@ exports.handler = async function () {
      }
     }
 
-    if (!apiTeamId) return { avgXgFor: null, avgXgAgainst: null };
+    if (!apiTeamId) {
+     console.warn(`Nem található API-Football ID a következőhöz: ${teamName}`);
+     return { avgXgFor: null, avgXgAgainst: null };
+    }
 
     const matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&status=FT&last=5`, {
      headers: { "x-apisports-key": apiFootballKey }
@@ -231,7 +255,6 @@ exports.handler = async function () {
       const teamStats = isHome ? homeTeamObj.statistics : awayTeamObj.statistics;
       const oppStats = isHome ? awayTeamObj.statistics : homeTeamObj.statistics;
 
-      // Pontos matchelés az "expected_goals" kulcsra
       const xgForObj = teamStats.find((s) => String(s.type).toLowerCase() === "expected_goals");
       const xgAgainstObj = oppStats.find((s) => String(s.type).toLowerCase() === "expected_goals");
 
