@@ -5,7 +5,7 @@ exports.handler = async function () {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const footballToken = process.env.FOOTBALL_DATA_API_KEY;
-  const apiFootballKey = process.env.API_FOOTBALL_KEY; // ÚJ: API-Football v3 kulcs beolvasása
+  const apiFootballKey = process.env.API_FOOTBALL_KEY;
 
   if (!supabaseUrl || !supabaseKey || !footballToken) {
    return {
@@ -139,8 +139,8 @@ exports.handler = async function () {
      last10_ht_goals_for: latestCache.last10_ht_goals_for ?? null,
      last10_ht_goals_against: latestCache.last10_ht_goals_against ?? null,
      last10_ht_over05_rate: latestCache.last10_ht_over05_rate ?? null,
-     last5_avg_xg_for: latestCache.last5_avg_xg_for ?? null, // ÚJ: xG megőrzése másoláskor
-     last5_avg_xg_against: latestCache.last5_avg_xg_against ?? null, // ÚJ: xG megőrzése másoláskor
+     last5_avg_xg_for: latestCache.last5_avg_xg_for ?? null,
+     last5_avg_xg_against: latestCache.last5_avg_xg_against ?? null,
      updated_at: new Date().toISOString()
     });
    } else {
@@ -183,12 +183,21 @@ exports.handler = async function () {
    }
   }
 
-  // --- ÚJ: API-Football v3 xG adatok lekérdezése az utolsó meccsekre ---
+  // --- API-Football v3 xG adatok lekérdezése név-tisztítással ---
   async function fetchTeamXgStats(teamName) {
    if (!apiFootballKey) return { avgXgFor: null, avgXgAgainst: null };
 
    try {
-    const teamRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(teamName)}`, {
+    // Csapatnév tisztítása a pontosabb API-Football kereséshez
+    const cleanName = teamName
+     .replace(/\b(RC|CF|FC|UD|CD|SD|CA|RCD|Club)\b/gi, "")
+     .replace(/\bde\b/gi, "")
+     .replace(/\s+/g, " ")
+     .trim();
+
+    const searchTerm = cleanName.length >= 3 ? cleanName : teamName;
+
+    const teamRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(searchTerm)}`, {
      headers: { "x-apisports-key": apiFootballKey }
     });
     const teamData = await teamRes.json();
@@ -271,18 +280,15 @@ exports.handler = async function () {
    const ALLOWED_COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1", "CL"];
    const currentSeasonStartDate = new Date(`${season}-07-01T00:00:00.000Z`).getTime();
 
-   // 1. Az összes bejövő meccset szigorúan csökkenő sorrendbe rendezzük (a legfrissebb az első indexen)
    const rawMatches = [...(matches || [])].sort(
     (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
    );
 
-   // 2. Csak az engedélyezett ligák meccseit tartjuk meg
    const validMatches = rawMatches.filter((m) => {
     const compCode = m.competition?.code;
     return ALLOWED_COMPETITIONS.includes(compCode);
    });
 
-   // 3. Szezon szerinti bontás
    const currentSeasonMatches = validMatches.filter(
     (m) => new Date(m.utcDate).getTime() >= currentSeasonStartDate
    );
@@ -290,7 +296,6 @@ exports.handler = async function () {
     (m) => new Date(m.utcDate).getTime() < currentSeasonStartDate
    );
 
-   // 4. Ha az aktuális szezonból még nincs 5 meccs, a tavalyi szezon legvégéről pótoljuk
    let formSourceMatches = [...currentSeasonMatches];
    if (formSourceMatches.length < 5) {
     const needed = 5 - formSourceMatches.length;
@@ -350,7 +355,6 @@ exports.handler = async function () {
     });
    }
 
-   // --- Félidei statisztikák az utolsó 10 meccsből ---
    const htStats = last10AllMatches.map((m) => {
     const isHome = m.homeTeam?.id === team.team_id;
     const htHome = m.score?.halfTime?.home;
@@ -391,8 +395,8 @@ exports.handler = async function () {
     last10_ht_goals_for,
     last10_ht_goals_against,
     last10_ht_over05_rate,
-    last5_avg_xg_for: xgData.avgXgFor ?? null, // ÚJ: xG mező elmentése
-    last5_avg_xg_against: xgData.avgXgAgainst ?? null, // ÚJ: xG mező elmentése
+    last5_avg_xg_for: xgData.avgXgFor ?? null,
+    last5_avg_xg_against: xgData.avgXgAgainst ?? null,
     home_last_10_count: homeMatches.length,
     away_last_10_count: awayMatches.length,
     last10_avg_goals_for: weightedAverage(last10Stats.map((x) => x.goalsFor), 1.3),
@@ -436,7 +440,6 @@ exports.handler = async function () {
     continue;
    }
 
-   // ÚJ: Utolsó 5 meccs xG mutatóinak lekérése az API-Football-ról
    const xgData = await fetchTeamXgStats(team.team_name);
 
    const row = buildTeamFormRow(team, recentMatches, xgData);
@@ -448,8 +451,8 @@ exports.handler = async function () {
     fetched_matches: recentMatches.length,
     last_5_count: row.last_5_count,
     last_5_form: row.last_5_form,
-    last5_avg_xg_for: row.last5_avg_xg_for, // ÚJ
-    last5_avg_xg_against: row.last5_avg_xg_against, // ÚJ
+    last5_avg_xg_for: row.last5_avg_xg_for,
+    last5_avg_xg_against: row.last5_avg_xg_against,
     last10_ht_goals_for: row.last10_ht_goals_for,
     last10_ht_over05_rate: row.last10_ht_over05_rate
    });
