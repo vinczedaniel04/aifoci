@@ -183,27 +183,34 @@ exports.handler = async function () {
    }
   }
 
-  // --- API-Football v3 xG adatok lekérdezése név-tisztítással ---
+  // --- API-Football v3 xG adatok lekérdezése többlépcsős névkereséssel (Fallback) ---
   async function fetchTeamXgStats(teamName) {
    if (!apiFootballKey) return { avgXgFor: null, avgXgAgainst: null };
 
    try {
-    // Csapatnév tisztítása a pontosabb API-Football kereséshez
     const cleanName = teamName
-     .replace(/\b(RC|CF|FC|UD|CD|SD|CA|RCD|Club)\b/gi, "")
+     .replace(/\b(RC|CF|FC|UD|CD|SD|CA|RCD|Club|OGC|Alsace)\b/gi, "")
      .replace(/\bde\b/gi, "")
      .replace(/\s+/g, " ")
      .trim();
 
-    const searchTerm = cleanName.length >= 3 ? cleanName : teamName;
+    const words = cleanName.split(" ").filter((w) => w.length >= 3);
+    const searchTerms = Array.from(new Set([cleanName, words[words.length - 1], teamName])).filter(Boolean);
 
-    const teamRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(searchTerm)}`, {
-     headers: { "x-apisports-key": apiFootballKey }
-    });
-    const teamData = await teamRes.json();
-    if (!teamData.response || teamData.response.length === 0) return { avgXgFor: null, avgXgAgainst: null };
+    let apiTeamId = null;
 
-    const apiTeamId = teamData.response[0].team.id;
+    for (const term of searchTerms) {
+     const teamRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(term)}`, {
+      headers: { "x-apisports-key": apiFootballKey }
+     });
+     const teamData = await teamRes.json();
+     if (teamData.response && teamData.response.length > 0) {
+      apiTeamId = teamData.response[0].team.id;
+      break;
+     }
+    }
+
+    if (!apiTeamId) return { avgXgFor: null, avgXgAgainst: null };
 
     const matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&status=FT&last=5`, {
      headers: { "x-apisports-key": apiFootballKey }
@@ -231,12 +238,14 @@ exports.handler = async function () {
       const xgForObj = teamStats.find((s) => s.type === "Expected Goals");
       const xgAgainstObj = oppStats.find((s) => s.type === "Expected Goals");
 
-      const xgFor = xgForObj && xgForObj.value ? parseFloat(xgForObj.value) : 0;
-      const xgAgainst = xgAgainstObj && xgAgainstObj.value ? parseFloat(xgAgainstObj.value) : 0;
+      const xgFor = xgForObj && xgForObj.value !== null ? parseFloat(xgForObj.value) : null;
+      const xgAgainst = xgAgainstObj && xgAgainstObj.value !== null ? parseFloat(xgAgainstObj.value) : null;
 
-      totalXgFor += xgFor;
-      totalXgAgainst += xgAgainst;
-      count++;
+      if (xgFor !== null && xgAgainst !== null) {
+       totalXgFor += xgFor;
+       totalXgAgainst += xgAgainst;
+       count++;
+      }
      }
     }
 
