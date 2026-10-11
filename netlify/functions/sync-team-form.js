@@ -191,7 +191,7 @@ exports.handler = async function () {
    }
   }
 
-  // --- API-Football v3 xG Lekérdezés Részletes Rendszernaplával ---
+  // --- API-Football v3 xG Lekérdezés Szezon Paraméterrel ---
   async function fetchTeamXgStats(teamName) {
    const logs = [];
    if (!apiFootballKey) {
@@ -233,11 +233,21 @@ exports.handler = async function () {
 
     logs.push(`Talált ID: ${apiTeamId} (Keresett szóra: "${matchedTerm}")`);
 
-    const matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&status=FT&last=5`, {
+    // 1. Megpróbáljuk lekérni az aktuális szezon meccseit
+    let matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&season=${season}&status=FT&last=5`, {
      headers: { "x-apisports-key": apiFootballKey }
     });
-    const matchesData = await matchesRes.json();
-    const fixtures = matchesData.response || [];
+    let matchesData = await matchesRes.json();
+    let fixtures = matchesData.response || [];
+
+    // 2. Ha az aktuális szezonra üres, lekérjük szezon szűrő nélkül a legutóbbi 5 meccset
+    if (fixtures.length === 0) {
+     matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&status=FT&last=5`, {
+      headers: { "x-apisports-key": apiFootballKey }
+     });
+     matchesData = await matchesRes.json();
+     fixtures = matchesData.response || [];
+    }
 
     if (fixtures.length === 0) {
      logs.push(`Nincs befejezett (FT) meccs a csapatnál az API-ban`);
@@ -504,7 +514,7 @@ exports.handler = async function () {
     last_5_form: row.last_5_form,
     last5_avg_xg_for: row.last5_avg_xg_for,
     last5_avg_xg_against: row.last5_avg_xg_against,
-    debug_logs: xgData.logs || [] // ÚJ: Pontos hibasorok naplózása a válaszban!
+    debug_logs: xgData.logs || []
    });
 
    await new Promise((resolve) => setTimeout(resolve, 1800));
