@@ -59,7 +59,7 @@ exports.handler = async function () {
   }
 
   const { matchDay, startOfDay, endOfDay } = getLogicalDates();
-  const season = getSeasonStartYearUtc();
+  const season = getSeasonStartYearUtc(); // 2026
 
   const LEAGUE_STRENGTH = {
    CL: 1.0, PL: 1.0, PD: 0.97, BL1: 0.96, SA: 0.95, FL1: 0.93, DED: 0.89, WC: 1.0, OTHERS: 0.9
@@ -191,8 +191,8 @@ exports.handler = async function () {
    }
   }
 
-  // --- API-Football v3 xG Lekérdezés Szezon Paraméterrel ---
-  async function fetchTeamXgStats(teamName) {
+  // --- API-Football v3 xG Lekérdezés pontos Szezon átadással ---
+  async function fetchTeamXgStats(teamName, currentSeasonYear) {
    const logs = [];
    if (!apiFootballKey) {
     logs.push("Hiányzó API_FOOTBALL_KEY kulcs");
@@ -227,30 +227,32 @@ exports.handler = async function () {
     }
 
     if (!apiTeamId) {
-     logs.push(`Nincs találat a keresőben a kifejezésekre: ${searchTerms.join(", ")}`);
+     logs.push(`Nincs találat a keresőben: ${searchTerms.join(", ")}`);
      return { avgXgFor: null, avgXgAgainst: null, logs };
     }
 
     logs.push(`Talált ID: ${apiTeamId} (Keresett szóra: "${matchedTerm}")`);
 
-    // 1. Megpróbáljuk lekérni az aktuális szezon meccseit
-    let matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&season=${season}&status=FT&last=5`, {
+    // 1. Lekérjük a 2026-os szezon lezárt meccseit
+    let matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&season=${currentSeasonYear}&status=FT&last=5`, {
      headers: { "x-apisports-key": apiFootballKey }
     });
     let matchesData = await matchesRes.json();
     let fixtures = matchesData.response || [];
 
-    // 2. Ha az aktuális szezonra üres, lekérjük szezon szűrő nélkül a legutóbbi 5 meccset
-    if (fixtures.length === 0) {
-     matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&status=FT&last=5`, {
+    // 2. Ha kevesebb mint 5 meccs van 2026-ban, lekérjük a 2025-ös szezon végét is pótlásnak
+    if (fixtures.length < 5) {
+     const prevSeason = currentSeasonYear - 1;
+     const prevRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&season=${prevSeason}&status=FT&last=5`, {
       headers: { "x-apisports-key": apiFootballKey }
      });
-     matchesData = await matchesRes.json();
-     fixtures = matchesData.response || [];
+     const prevData = await prevRes.json();
+     const prevFixtures = prevData.response || [];
+     fixtures = [...fixtures, ...prevFixtures].slice(0, 5);
     }
 
     if (fixtures.length === 0) {
-     logs.push(`Nincs befejezett (FT) meccs a csapatnál az API-ban`);
+     logs.push(`Nincs befejezett meccs 2026-ban és 2025-ben sem`);
      return { avgXgFor: null, avgXgAgainst: null, logs };
     }
 
@@ -270,10 +272,7 @@ exports.handler = async function () {
       const homeTeamObj = statData.response.find(r => r.team && r.team.id === fix.teams.home.id);
       const awayTeamObj = statData.response.find(r => r.team && r.team.id === fix.teams.away.id);
 
-      if (!homeTeamObj || !awayTeamObj) {
-       logs.push(`Meccs ${fix.fixture.id}: Nem azonosítható csapatok a statisztikában`);
-       continue;
-      }
+      if (!homeTeamObj || !awayTeamObj) continue;
 
       const isHome = fix.teams.home.id === apiTeamId;
       const teamStats = isHome ? homeTeamObj.statistics : awayTeamObj.statistics;
@@ -290,13 +289,13 @@ exports.handler = async function () {
        totalXgAgainst += xgAgainst;
        count++;
       } else {
-       logs.push(`Meccs ${fix.fixture.id}: Hiányzó xG értékek (xGF: ${xgFor}, xGA: ${xgAgainst})`);
+       logs.push(`Meccs ${fix.fixture.id}: Hiányzó xG értékek`);
       }
      }
     }
 
     if (count === 0) {
-     logs.push(`Egyetlen meccsnél sem sikerült xG-t számolni`);
+     logs.push(`Egyetlen meccsnél sem sikerült xG-t kiolvasni`);
      return { avgXgFor: null, avgXgAgainst: null, logs };
     }
 
@@ -501,7 +500,8 @@ exports.handler = async function () {
     continue;
    }
 
-   const xgData = await fetchTeamXgStats(team.team_name);
+   // Átadjuk az aktuális szezon évszámát (2026) a függvénynek!
+   const xgData = await fetchTeamXgStats(team.team_name, season);
 
    const row = buildTeamFormRow(team, recentMatches, xgData);
 
