@@ -57,15 +57,6 @@ exports.handler = async function () {
    return value.map((x) => String(x || "").toUpperCase()).filter((x) => ["GY", "D", "V"].includes(x)).slice(0, 5);
   }
 
-  async function fetchJson(url, options = {}) {
-   const response = await fetch(url, options);
-   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`${response.status} ${text}`);
-   }
-   return await response.json();
-  }
-
   const { data: todayMatches, error: matchesError } = await supabase
    .from("matches")
    .select("match_date,status,home_team_id,home_team_name,away_team_id,away_team_name")
@@ -183,7 +174,7 @@ exports.handler = async function () {
    }
   }
 
-  // --- API-Football v3 xG adatok lekérdezése többlépcsős névkereséssel és hibatűrő parse-szal ---
+  // --- Pontosított API-Football v3 xG lekérdezés ---
   async function fetchTeamXgStats(teamName) {
    if (!apiFootballKey) return { avgXgFor: null, avgXgAgainst: null };
 
@@ -240,15 +231,9 @@ exports.handler = async function () {
       const teamStats = isHome ? homeTeamObj.statistics : awayTeamObj.statistics;
       const oppStats = isHome ? awayTeamObj.statistics : homeTeamObj.statistics;
 
-      const xgForObj = teamStats.find((s) => {
-       const t = String(s.type || "").toLowerCase().replace(/_/g, " ");
-       return t === "expected goals" || t === "xg";
-      });
-
-      const xgAgainstObj = oppStats.find((s) => {
-       const t = String(s.type || "").toLowerCase().replace(/_/g, " ");
-       return t === "expected goals" || t === "xg";
-      });
+      // Pontos matchelés az "expected_goals" kulcsra
+      const xgForObj = teamStats.find((s) => String(s.type).toLowerCase() === "expected_goals");
+      const xgAgainstObj = oppStats.find((s) => String(s.type).toLowerCase() === "expected_goals");
 
       const xgFor = xgForObj && xgForObj.value !== null && xgForObj.value !== undefined ? parseFloat(xgForObj.value) : null;
       const xgAgainst = xgAgainstObj && xgAgainstObj.value !== null && xgAgainstObj.value !== undefined ? parseFloat(xgAgainstObj.value) : null;
