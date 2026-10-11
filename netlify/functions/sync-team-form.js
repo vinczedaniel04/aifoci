@@ -183,7 +183,7 @@ exports.handler = async function () {
    }
   }
 
-  // --- API-Football v3 xG adatok lekérdezése többlépcsős névkereséssel (Fallback) ---
+  // --- API-Football v3 xG adatok lekérdezése többlépcsős névkereséssel és hibatűrő parse-szal ---
   async function fetchTeamXgStats(teamName) {
    if (!apiFootballKey) return { avgXgFor: null, avgXgAgainst: null };
 
@@ -231,17 +231,29 @@ exports.handler = async function () {
      const statData = await statRes.json();
 
      if (statData.response && statData.response.length === 2) {
+      const homeTeamObj = statData.response.find(r => r.team && r.team.id === fix.teams.home.id);
+      const awayTeamObj = statData.response.find(r => r.team && r.team.id === fix.teams.away.id);
+
+      if (!homeTeamObj || !awayTeamObj) continue;
+
       const isHome = fix.teams.home.id === apiTeamId;
-      const teamStats = isHome ? statData.response[0].statistics : statData.response[1].statistics;
-      const oppStats = isHome ? statData.response[1].statistics : statData.response[0].statistics;
+      const teamStats = isHome ? homeTeamObj.statistics : awayTeamObj.statistics;
+      const oppStats = isHome ? awayTeamObj.statistics : homeTeamObj.statistics;
 
-      const xgForObj = teamStats.find((s) => s.type === "Expected Goals");
-      const xgAgainstObj = oppStats.find((s) => s.type === "Expected Goals");
+      const xgForObj = teamStats.find((s) => {
+       const t = String(s.type || "").toLowerCase().replace(/_/g, " ");
+       return t === "expected goals" || t === "xg";
+      });
 
-      const xgFor = xgForObj && xgForObj.value !== null ? parseFloat(xgForObj.value) : null;
-      const xgAgainst = xgAgainstObj && xgAgainstObj.value !== null ? parseFloat(xgAgainstObj.value) : null;
+      const xgAgainstObj = oppStats.find((s) => {
+       const t = String(s.type || "").toLowerCase().replace(/_/g, " ");
+       return t === "expected goals" || t === "xg";
+      });
 
-      if (xgFor !== null && xgAgainst !== null) {
+      const xgFor = xgForObj && xgForObj.value !== null && xgForObj.value !== undefined ? parseFloat(xgForObj.value) : null;
+      const xgAgainst = xgAgainstObj && xgAgainstObj.value !== null && xgAgainstObj.value !== undefined ? parseFloat(xgAgainstObj.value) : null;
+
+      if (xgFor !== null && !isNaN(xgFor) && xgAgainst !== null && !isNaN(xgAgainst)) {
        totalXgFor += xgFor;
        totalXgAgainst += xgAgainst;
        count++;
