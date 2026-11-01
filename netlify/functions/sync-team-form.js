@@ -5,7 +5,6 @@ exports.handler = async function () {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const footballToken = process.env.FOOTBALL_DATA_API_KEY;
-  const apiFootballKey = process.env.API_FOOTBALL_KEY;
 
   if (!supabaseUrl || !supabaseKey || !footballToken) {
    return {
@@ -17,23 +16,6 @@ exports.handler = async function () {
 
   const supabase = createClient(supabaseUrl, supabaseKey);
   const API_BASE = "https://api.football-data.org/v4";
-
-  const TEAM_NAME_MAP = {
-   "OGC Nice": "Nice",
-   "RC Strasbourg Alsace": "Strasbourg",
-   "RC Celta de Vigo": "Celta Vigo",
-   "Elche CF": "Elche",
-   "RCD Mallorca": "Mallorca",
-   "UD Las Palmas": "Las Palmas",
-   "CA Osasuna": "Osasuna",
-   "RCD Espanyol de Barcelona": "Espanyol",
-   "Getafe CF": "Getafe",
-   "Girona FC": "Girona",
-   "Rayo Vallecano de Madrid": "Rayo Vallecano",
-   "Real Valladolid CF": "Valladolid",
-   "Deportivo Alavés": "Alaves",
-   "Athletic Club": "Athletic Bilbao"
-  };
 
   function getLogicalDates() {
    const now = new Date();
@@ -59,7 +41,7 @@ exports.handler = async function () {
   }
 
   const { matchDay, startOfDay, endOfDay } = getLogicalDates();
-  const season = getSeasonStartYearUtc(); // 2026
+  const season = getSeasonStartYearUtc();
 
   const LEAGUE_STRENGTH = {
    CL: 1.0, PL: 1.0, PD: 0.97, BL1: 0.96, SA: 0.95, FL1: 0.93, DED: 0.89, WC: 1.0, OTHERS: 0.9
@@ -72,6 +54,15 @@ exports.handler = async function () {
   function normalizeFormArray(value) {
    if (!Array.isArray(value)) return [];
    return value.map((x) => String(x || "").toUpperCase()).filter((x) => ["GY", "D", "V"].includes(x)).slice(0, 5);
+  }
+
+  async function fetchJson(url, options = {}) {
+   const response = await fetch(url, options);
+   if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`${response.status} ${text}`);
+   }
+   return await response.json();
   }
 
   const { data: todayMatches, error: matchesError } = await supabase
@@ -147,8 +138,6 @@ exports.handler = async function () {
      last10_ht_goals_for: latestCache.last10_ht_goals_for ?? null,
      last10_ht_goals_against: latestCache.last10_ht_goals_against ?? null,
      last10_ht_over05_rate: latestCache.last10_ht_over05_rate ?? null,
-     last5_avg_xg_for: latestCache.last5_avg_xg_for ?? null,
-     last5_avg_xg_against: latestCache.last5_avg_xg_against ?? null,
      updated_at: new Date().toISOString()
     });
    } else {
@@ -191,127 +180,6 @@ exports.handler = async function () {
    }
   }
 
-  // --- API-Football v3 xG Lekérdezés pontos Szezon átadással ---
-  async function fetchTeamXgStats(teamName, currentSeasonYear) {
-   const logs = [];
-   if (!apiFootballKey) {
-    logs.push("Hiányzó API_FOOTBALL_KEY kulcs");
-    return { avgXgFor: null, avgXgAgainst: null, logs };
-   }
-
-   try {
-    const mappedName = TEAM_NAME_MAP[teamName];
-    
-    const cleanName = teamName
-     .replace(/\b(RC|CF|FC|UD|CD|SD|CA|RCD|Club|OGC|Alsace)\b/gi, "")
-     .replace(/\bde\b/gi, "")
-     .replace(/\s+/g, " ")
-     .trim();
-
-    const words = cleanName.split(" ").filter((w) => w.length >= 3);
-    const searchTerms = Array.from(new Set([mappedName, cleanName, words[words.length - 1], teamName])).filter(Boolean);
-
-    let apiTeamId = null;
-    let matchedTerm = "";
-
-    for (const term of searchTerms) {
-     const teamRes = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(term)}`, {
-      headers: { "x-apisports-key": apiFootballKey }
-     });
-     const teamData = await teamRes.json();
-     if (teamData.response && teamData.response.length > 0) {
-      apiTeamId = teamData.response[0].team.id;
-      matchedTerm = term;
-      break;
-     }
-    }
-
-    if (!apiTeamId) {
-     logs.push(`Nincs találat a keresőben: ${searchTerms.join(", ")}`);
-     return { avgXgFor: null, avgXgAgainst: null, logs };
-    }
-
-    logs.push(`Talált ID: ${apiTeamId} (Keresett szóra: "${matchedTerm}")`);
-
-    // 1. Lekérjük a 2026-os szezon lezárt meccseit
-    let matchesRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&season=${currentSeasonYear}&status=FT&last=5`, {
-     headers: { "x-apisports-key": apiFootballKey }
-    });
-    let matchesData = await matchesRes.json();
-    let fixtures = matchesData.response || [];
-
-    // 2. Ha kevesebb mint 5 meccs van 2026-ban, lekérjük a 2025-ös szezon végét is pótlásnak
-    if (fixtures.length < 5) {
-     const prevSeason = currentSeasonYear - 1;
-     const prevRes = await fetch(`https://v3.football.api-sports.io/fixtures?team=${apiTeamId}&season=${prevSeason}&status=FT&last=5`, {
-      headers: { "x-apisports-key": apiFootballKey }
-     });
-     const prevData = await prevRes.json();
-     const prevFixtures = prevData.response || [];
-     fixtures = [...fixtures, ...prevFixtures].slice(0, 5);
-    }
-
-    if (fixtures.length === 0) {
-     logs.push(`Nincs befejezett meccs 2026-ban és 2025-ben sem`);
-     return { avgXgFor: null, avgXgAgainst: null, logs };
-    }
-
-    logs.push(`Talált meccsek száma: ${fixtures.length}`);
-
-    let totalXgFor = 0;
-    let totalXgAgainst = 0;
-    let count = 0;
-
-    for (const fix of fixtures) {
-     const statRes = await fetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fix.fixture.id}`, {
-      headers: { "x-apisports-key": apiFootballKey }
-     });
-     const statData = await statRes.json();
-
-     if (statData.response && statData.response.length === 2) {
-      const homeTeamObj = statData.response.find(r => r.team && r.team.id === fix.teams.home.id);
-      const awayTeamObj = statData.response.find(r => r.team && r.team.id === fix.teams.away.id);
-
-      if (!homeTeamObj || !awayTeamObj) continue;
-
-      const isHome = fix.teams.home.id === apiTeamId;
-      const teamStats = isHome ? homeTeamObj.statistics : awayTeamObj.statistics;
-      const oppStats = isHome ? awayTeamObj.statistics : homeTeamObj.statistics;
-
-      const xgForObj = teamStats.find((s) => String(s.type).toLowerCase().replace(/_/g, " ") === "expected goals");
-      const xgAgainstObj = oppStats.find((s) => String(s.type).toLowerCase().replace(/_/g, " ") === "expected goals");
-
-      const xgFor = xgForObj && xgForObj.value !== null && xgForObj.value !== undefined ? parseFloat(xgForObj.value) : null;
-      const xgAgainst = xgAgainstObj && xgAgainstObj.value !== null && xgAgainstObj.value !== undefined ? parseFloat(xgAgainstObj.value) : null;
-
-      if (xgFor !== null && !isNaN(xgFor) && xgAgainst !== null && !isNaN(xgAgainst)) {
-       totalXgFor += xgFor;
-       totalXgAgainst += xgAgainst;
-       count++;
-      } else {
-       logs.push(`Meccs ${fix.fixture.id}: Hiányzó xG értékek`);
-      }
-     }
-    }
-
-    if (count === 0) {
-     logs.push(`Egyetlen meccsnél sem sikerült xG-t kiolvasni`);
-     return { avgXgFor: null, avgXgAgainst: null, logs };
-    }
-
-    logs.push(`Sikeres xG számítás ${count} meccsből`);
-
-    return {
-     avgXgFor: Number((totalXgFor / count).toFixed(2)),
-     avgXgAgainst: Number((totalXgAgainst / count).toFixed(2)),
-     logs
-    };
-   } catch (err) {
-    logs.push(`Hiba a feldolgozás során: ${err.message}`);
-    return { avgXgFor: null, avgXgAgainst: null, logs };
-   }
-  }
-
   function weightedAverage(values, fallback = 0) {
    if (!values.length) return fallback;
    let weightedSum = 0;
@@ -336,19 +204,22 @@ exports.handler = async function () {
    return Number((((weightedSum / totalWeight) || 0) * 100).toFixed(2));
   }
 
-  function buildTeamFormRow(team, matches, xgData = {}) {
+  function buildTeamFormRow(team, matches) {
    const ALLOWED_COMPETITIONS = ["PL", "PD", "BL1", "SA", "FL1", "CL"];
    const currentSeasonStartDate = new Date(`${season}-07-01T00:00:00.000Z`).getTime();
 
+   // 1. Az összes bejövő meccset szigorúan csökkenő sorrendbe rendezzük (a legfrissebb az első indexen)
    const rawMatches = [...(matches || [])].sort(
     (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
    );
 
+   // 2. Csak az engedélyezett ligák meccseit tartjuk meg
    const validMatches = rawMatches.filter((m) => {
     const compCode = m.competition?.code;
     return ALLOWED_COMPETITIONS.includes(compCode);
    });
 
+   // 3. Szezon szerinti bontás
    const currentSeasonMatches = validMatches.filter(
     (m) => new Date(m.utcDate).getTime() >= currentSeasonStartDate
    );
@@ -356,6 +227,7 @@ exports.handler = async function () {
     (m) => new Date(m.utcDate).getTime() < currentSeasonStartDate
    );
 
+   // 4. Ha az aktuális szezonból még nincs 5 meccs, a tavalyi szezon legvégéről pótoljuk
    let formSourceMatches = [...currentSeasonMatches];
    if (formSourceMatches.length < 5) {
     const needed = 5 - formSourceMatches.length;
@@ -415,6 +287,7 @@ exports.handler = async function () {
     });
    }
 
+   // --- Félidei statisztikák az utolsó 10 meccsből ---
    const htStats = last10AllMatches.map((m) => {
     const isHome = m.homeTeam?.id === team.team_id;
     const htHome = m.score?.halfTime?.home;
@@ -455,8 +328,6 @@ exports.handler = async function () {
     last10_ht_goals_for,
     last10_ht_goals_against,
     last10_ht_over05_rate,
-    last5_avg_xg_for: xgData.avgXgFor ?? null,
-    last5_avg_xg_against: xgData.avgXgAgainst ?? null,
     home_last_10_count: homeMatches.length,
     away_last_10_count: awayMatches.length,
     last10_avg_goals_for: weightedAverage(last10Stats.map((x) => x.goalsFor), 1.3),
@@ -495,15 +366,12 @@ exports.handler = async function () {
    const recentMatches = await getRecentFinishedMatches(team);
 
    if (recentMatches === null) {
-    console.warn(`Kihagyva: ${team.team_name}`);
+    console.warn(`Kihagyva (újrapróbálkozás a következő cron futáskor): ${team.team_name}`);
     await new Promise((resolve) => setTimeout(resolve, 2000));
     continue;
    }
 
-   // Átadjuk az aktuális szezon évszámát (2026) a függvénynek!
-   const xgData = await fetchTeamXgStats(team.team_name, season);
-
-   const row = buildTeamFormRow(team, recentMatches, xgData);
+   const row = buildTeamFormRow(team, recentMatches);
 
    fetchedRows.push(row);
    fetchedTeams.push({
@@ -512,9 +380,8 @@ exports.handler = async function () {
     fetched_matches: recentMatches.length,
     last_5_count: row.last_5_count,
     last_5_form: row.last_5_form,
-    last5_avg_xg_for: row.last5_avg_xg_for,
-    last5_avg_xg_against: row.last5_avg_xg_against,
-    debug_logs: xgData.logs || []
+    last10_ht_goals_for: row.last10_ht_goals_for,
+    last10_ht_over05_rate: row.last10_ht_over05_rate
    });
 
    await new Promise((resolve) => setTimeout(resolve, 1800));

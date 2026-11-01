@@ -4,154 +4,108 @@ exports.handler = async function () {
   try {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const footballToken = process.env.FOOTBALL_DATA_API_KEY;
 
-    if (!supabaseUrl || !supabaseKey) {
+    if (!supabaseUrl || !supabaseKey || !footballToken) {
       return {
         statusCode: 500,
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          error: "Hiányzó SUPABASE_URL vagy SUPABASE_SERVICE_ROLE_KEY"
-        })
+        body: JSON.stringify({ error: "Hiányzó API kulcsok" })
       };
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const now = new Date();
 
-    function getLogicalDates() {
-      const now = new Date();
-      now.setHours(now.getHours() - 6);
-
-      const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
-
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
-
-      const startOfDay = `${todayStr}T00:00:00.000Z`;
-      const endOfDay = `${tomorrowStr}T06:00:00.000Z`;
-
-      return { matchDay: todayStr, startOfDay, endOfDay };
-    }
-
-    function getActual1x2Result(homeGoals, awayGoals) {
-      if (homeGoals == null || awayGoals == null) return null;
-
-      const home = Number(homeGoals);
-      const away = Number(awayGoals);
-
-      if (Number.isNaN(home) || Number.isNaN(away)) return null;
-
-      if (home > away) return "HOME";
-      if (away > home) return "AWAY";
-      return "DRAW";
-    }
-
-    const { matchDay, startOfDay, endOfDay } = getLogicalDates();
-
-    const { data: matches, error: matchesError } = await supabase
+    // 1. Megkeressük az adatbázisban azokat a meccseket, amik még nincsenek lezárva (nem FINISHED)
+    const { data: pendingMatches, error: dbError } = await supabase
       .from("matches")
-      .select("*")
-      .gte("match_date", startOfDay)
-      .lte("match_date", endOfDay);
+      .select("id, match_date, status")
+      .neq("status", "FINISHED");
 
-    if (matchesError) throw matchesError;
+    if (dbError) throw dbError;
 
-    const { data: predictions, error: predictionsError } = await supabase
-      .from("predictions_history")
-      .select("match_id,predicted_score,final_over25_tip,final_btts_tip,predicted_1x2_pick")
-      .gte("match_date", startOfDay)
-      .lte("match_date", endOfDay);
+    // 2. Szűrés: Csak azokra a meccsekre figyelünk, amiknek a kezdése óta eltelt legalább 1 óra 50 perc (110 perc)
+    const MATCH_DURATION_MS = 110 * 60 * 1000; // 1 óra 50 perc ezredmásodpercben
 
-    if (predictionsError) throw predictionsError;
+    const dueMatches = (pendingMatches || []).filter((m) => {
+      const matchStartTime = new Date(m.match_date).getTime();
+      const expectedEndTime = matchStartTime + MATCH_DURATION_MS;
+      return now.getTime() >= expectedEndTime;
+    });
 
-    const predictionMap = new Map();
-
-    for (const prediction of predictions || []) {
-      predictionMap.set(prediction.match_id, prediction);
-    }
-
-    let updated = 0;
-    let skipped = 0;
-
-    for (const match of matches || []) {
-      const prediction = predictionMap.get(match.match_id);
-
-      if (!prediction) {
-        skipped += 1;
-        continue;
-      }
-
-      const status = (match.status || "").toUpperCase();
-      const isFinished = status === "FINISHED";
-
-      const actualHomeGoals = isFinished ? match.full_time_home : null;
-      const actualAwayGoals = isFinished ? match.full_time_away : null;
-
-      let exact_hit = null;
-      let over25_hit = null;
-      let btts_hit = null;
-      let winner_hit = null;
-
-      if (isFinished) {
-        const home = Number(match.full_time_home);
-        const away = Number(match.full_time_away);
-
-        if (!Number.isNaN(home) && !Number.isNaN(away)) {
-          const actualScore = `${home}-${away}`;
-          const actualTotal = home + away;
-          const actualBtts = home > 0 && away > 0;
-          const actual1x2 = getActual1x2Result(home, away);
-
-          exact_hit = prediction.predicted_score === actualScore;
-          over25_hit =
-            (prediction.final_over25_tip === "2,5 FELETT") === (actualTotal > 2.5);
-          btts_hit = (prediction.final_btts_tip === "IGEN") === actualBtts;
-          winner_hit =
-            prediction.predicted_1x2_pick != null
-              ? prediction.predicted_1x2_pick === actual1x2
-              : null;
-        }
-      }
-
-      const { error: updateError } = await supabase
-        .from("predictions_history")
-        .update({
-          status: match.status,
-          live_home: match.live_home ?? null,
-          live_away: match.live_away ?? null,
-          minute: match.minute ?? null,
-          actual_home_goals: actualHomeGoals,
-          actual_away_goals: actualAwayGoals,
-          exact_hit,
-          over25_hit,
-          btts_hit,
-          winner_hit,
-          updated_at: new Date().toISOString()
+    // Ha egyetlen meccs sem ért még véget a számítás szerint, leállunk API hívás nélkül
+    if (dueMatches.length === 0) {
+      return {
+        statusCode: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ok: true,
+          message: "Nincs mostanában lejárt frissítendő mérkőzés",
+          updated_count: 0
         })
-        .eq("match_id", match.match_id);
-
-      if (updateError) throw updateError;
-
-      updated += 1;
+      };
     }
+
+    // 3. Ha van várhatóan lezárult meccs, lekérjük az elmúlt 2 nap FINISHED meccseit az API-ból
+    const past = new Date(now);
+    past.setDate(past.getDate() - 2);
+
+    const dateFrom = past.toISOString().split("T")[0];
+    const dateTo = now.toISOString().split("T")[0];
+
+    const response = await fetch(
+      `https://api.football-data.org/v4/matches?status=FINISHED&dateFrom=${dateFrom}&dateTo=${dateTo}`,
+      {
+        headers: { "X-Auth-Token": footballToken }
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`API hiba: ${response.status} ${text}`);
+    }
+
+    const data = await response.json();
+    const finishedMatches = data.matches || [];
+
+    if (finishedMatches.length === 0) {
+      return {
+        statusCode: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ok: true, message: "Az API-ban még nem jelentek meg a végeredmények", updated_count: 0 })
+      };
+    }
+
+    // 4. Eredmények frissítése a Supabase-ben
+    const updates = finishedMatches.map((m) => ({
+      id: m.id,
+      status: "FINISHED",
+      score_home: m.score?.fullTime?.home ?? null,
+      score_away: m.score?.fullTime?.away ?? null,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error: upsertError } = await supabase
+      .from("matches")
+      .upsert(updates, { onConflict: "id" });
+
+    if (upsertError) throw upsertError;
 
     return {
       statusCode: 200,
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         ok: true,
-        updated,
-        skipped,
-        match_day: matchDay
+        message: "Végeredmények sikeresen frissítve",
+        updated_count: updates.length
       })
     };
   } catch (error) {
     return {
       statusCode: 500,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        error: error.message || "Ismeretlen hiba"
-      })
+      body: JSON.stringify({ error: error.message || "Ismeretlen hiba" })
     };
   }
 };
